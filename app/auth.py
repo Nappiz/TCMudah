@@ -32,20 +32,19 @@ def create_access_token(sub: str, role: str) -> str:
 
 # ========== Cookie attrs (konsistensi set & delete) ==========
 def _cookie_attrs():
-    """
-    Tentukan atribut cookie berdasarkan APP_ORIGIN.
-    - Di localhost: Secure=False, SameSite=Lax
-    - Di produksi (vercel.app): Secure=True, SameSite=Lax
-    - domain=None => host-only cookie (menempel hanya ke host BE, tcmudahbe.vercel.app)
-    """
+    from urllib.parse import urlparse
     fe = (settings.APP_ORIGIN or "http://localhost:3000").rstrip("/")
     fe_host = urlparse(fe).hostname or "localhost"
-    is_localhost = fe_host in {"localhost", "127.0.0.1"}
+    is_local = fe_host in {"localhost", "127.0.0.1"}
 
-    same_site = "lax"  # vercel FE & BE berada di eTLD+1 yang sama → same-site cukup Lax
-    secure = False if is_localhost else True
-    domain = None  # PENTING: host-only. Jangan set ".vercel.app"
+    if is_local:
+        same_site = "lax"   # dev
+        secure    = False
+    else:
+        same_site = "none"  # prod: agar cookie SELALU terkirim di XHR cross-site
+        secure    = True    # wajib utk SameSite=None
 
+    domain = None  # host-only; JANGAN isi .vercel.app
     return same_site, secure, domain
 
 def set_jwt_cookie(resp: Response, token: str):
