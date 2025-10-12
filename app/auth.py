@@ -12,7 +12,6 @@ COOKIE_NAME = "tcmudah_token"
 
 # ========== Password helpers ==========
 def hash_password(pw: str) -> str:
-    # ident=2b untuk bcrypt modern; truncate_error=False agar aman di berbagai env
     return passlib_bcrypt.using(rounds=12, ident="2b", truncate_error=False).hash(pw)
 
 def verify_password(pw: str, hashed: str) -> bool:
@@ -32,19 +31,19 @@ def create_access_token(sub: str, role: str) -> str:
 
 # ========== Cookie attrs (konsistensi set & delete) ==========
 def _cookie_attrs():
-    from urllib.parse import urlparse
+    """
+    Dengan Opsi A (proxy via FE), cookie menjadi first-party.
+    - Di lokal: SameSite=Lax, Secure=False
+    - Di produksi: SameSite=Lax, Secure=True
+    - Domain: None (host-only) -> WAJIB, jangan set .vercel.app
+    """
     fe = (settings.APP_ORIGIN or "http://localhost:3000").rstrip("/")
     fe_host = urlparse(fe).hostname or "localhost"
     is_local = fe_host in {"localhost", "127.0.0.1"}
 
-    if is_local:
-        same_site = "lax"   # dev
-        secure    = False
-    else:
-        same_site = "none"  # prod: agar cookie SELALU terkirim di XHR cross-site
-        secure    = True    # wajib utk SameSite=None
-
-    domain = None  # host-only; JANGAN isi .vercel.app
+    same_site = "lax" 
+    secure = not is_local
+    domain = None             
     return same_site, secure, domain
 
 def set_jwt_cookie(resp: Response, token: str):
@@ -62,14 +61,12 @@ def set_jwt_cookie(resp: Response, token: str):
 
 def clear_jwt_cookie(resp: Response):
     same_site, secure, domain = _cookie_attrs()
-    # 1) Hapus dengan atribut yang sama
     resp.delete_cookie(
         key=COOKIE_NAME,
         path="/",
         domain=domain,
         samesite=same_site,
     )
-    # 2) Belt & suspenders: set cookie expired (untuk browser yang rewel)
     resp.set_cookie(
         key=COOKIE_NAME,
         value="",
@@ -80,4 +77,3 @@ def clear_jwt_cookie(resp: Response):
         max_age=0,
         domain=domain,
     )
-    
