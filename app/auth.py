@@ -1,15 +1,14 @@
 from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import Response
-from passlib.hash import bcrypt as passlib_bcrypt  # <-- gunakan hash class langsung
+from passlib.hash import bcrypt as passlib_bcrypt 
 from .config import get_settings
+from urllib.parse import urlparse
 
 settings = get_settings()
 COOKIE_NAME = "tcmudah_token"
 
-# ===== Password helpers =====
 def hash_password(pw: str) -> str:
-    # ident=2b untuk bcrypt modern; truncate_error=False agar tidak rewel di env tertentu
     return passlib_bcrypt.using(rounds=12, ident="2b", truncate_error=False).hash(pw)
 
 def verify_password(pw: str, hashed: str) -> bool:
@@ -18,20 +17,29 @@ def verify_password(pw: str, hashed: str) -> bool:
     except Exception:
         return False
 
-# ===== JWT helpers =====
 def create_access_token(sub: str, role: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRES_MIN)
     return jwt.encode({"sub": sub, "role": role, "exp": exp}, settings.JWT_SECRET, algorithm=settings.JWT_ALG)
 
 def set_jwt_cookie(resp: Response, token: str):
+    fe = (settings.APP_ORIGIN or "http://localhost:3000").rstrip("/")
+    fe_host = urlparse(fe).hostname or "localhost"
+    is_localhost = fe_host in {"localhost", "127.0.0.1"}
+
+    same_site = "lax" if is_localhost else "none"
+    secure    = False if is_localhost else True
+
+    cookie_domain = getattr(settings, "COOKIE_DOMAIN", None) or None
+
     resp.set_cookie(
         key="tcmudah_token",
         value=token,
         httponly=True,
-        secure=False,  # set True di production HTTPS
-        samesite="lax",
+        secure=secure,           
+        samesite=same_site,
         path="/",
         max_age=settings.JWT_EXPIRES_MIN * 60,
+        domain=cookie_domain
     )
 
 def clear_jwt_cookie(resp: Response):
