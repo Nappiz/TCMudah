@@ -675,29 +675,38 @@ def delete_material_admin(mid: str):
         raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
     return {"ok": True}
 
-# PESERTA: list materi visible untuk kelas tertentu (+validasi enrollment)
+# PESERTA & STAFF: list materi untuk kelas tertentu
 @app.get("/materials", response_model=list[MaterialOut], dependencies=[Depends(get_current_user)])
 def list_materials_user(class_id: str = Query(...), user=Depends(get_current_user)):
     sb = supabase()
 
-    enr = (
-        sb.table("enrollments")
-        .select("id")
-        .eq("user_id", user["id"])
-        .eq("class_id", class_id)
-        .eq("active", True)
-        .limit(1)
-        .execute()
-    )
-    if not enr.data:
-        raise HTTPException(status_code=403, detail="Tidak punya akses ke kelas ini")
+    role = (user or {}).get("role", "peserta")
+    is_staff = role in ("mentor", "admin", "superadmin")
 
-    res = (
+    # Peserta: wajib punya enrollment aktif
+    if not is_staff:
+        enr = (
+            sb.table("enrollments")
+            .select("id")
+            .eq("user_id", user["id"])
+            .eq("class_id", class_id)
+            .eq("active", True)
+            .limit(1)
+            .execute()
+        )
+        if not enr.data:
+            raise HTTPException(status_code=403, detail="Tidak punya akses ke kelas ini")
+
+    # Materi yang ditampilkan:
+    # - Peserta: hanya yang visible
+    # - Staff: tetap gunakan visible=True supaya tampilan /peserta konsisten; 
+    #          kalau mau kelola/lihat semua gunakan endpoint admin (/admin/materials)
+    q = (
         sb.table("class_materials")
         .select("*")
         .eq("class_id", class_id)
         .eq("visible", True)
         .order("created_at", desc=True)
-        .execute()
     )
+    res = q.execute()
     return res.data or []
