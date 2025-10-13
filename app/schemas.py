@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import Optional, Literal, Annotated, List
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from typing_extensions import Annotated
+
 
 # ===== Roles =====
 Role = Literal["superadmin", "admin", "mentor", "peserta"]
@@ -181,3 +183,25 @@ class MaterialUpdate(BaseModel):
 class MaterialOut(MaterialBase):
     id: str
     created_at: Optional[str] = None
+
+# --- Feedback (anon) ---
+Text1000 = Annotated[str, Field(min_length=4, max_length=1000)]
+Rating = Annotated[int, Field(ge=1, le=5)]
+
+class FeedbackIn(BaseModel):
+    class_id: str
+    text: str = Field(..., min_length=4, max_length=1000, alias="message")
+    rating: int | None = Field(default=None, ge=1, le=5)
+
+    class Config:
+        populate_by_name = True  
+
+class FeedbackOut(BaseModel):
+    id: str
+    class_id: str
+    text: str
+    rating: Optional[int] = None
+    created_at: Optional[str] = None
+
+class AdminFeedbackOut(FeedbackOut):
+    class_title: Optional[str] = None

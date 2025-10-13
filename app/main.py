@@ -15,6 +15,7 @@ from .schemas import (
     CheckoutInfoOut, OrderCreateIn, OrderOut, AdminOrderOut,
     EnrollmentOut, EnrollmentSetIn,
     MaterialIn, MaterialOut, MaterialUpdate,
+    FeedbackIn, FeedbackOut, AdminFeedbackOut,
 )
 from .auth import (
     hash_password, verify_password,
@@ -575,7 +576,6 @@ def my_enrollments(user=Depends(get_current_user)):
     )
     return res.data or []
 
-# Admin/Mentor: set (replace) kelas aktif untuk seorang user
 @app.post("/admin/enrollments/set", response_model=list[EnrollmentOut],
           dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
 def set_user_enrollments(payload: EnrollmentSetIn, current=Depends(get_current_user)):
@@ -598,7 +598,6 @@ def set_user_enrollments(payload: EnrollmentSetIn, current=Depends(get_current_u
     final = sb.table("enrollments").select("*").eq("user_id", payload.user_id).order("created_at", desc=True).execute()
     return final.data or []
 
-# Admin/Mentor: toggle satu enrollment
 @app.patch("/admin/enrollments/{eid}/active", response_model=EnrollmentOut,
            dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
 def toggle_enrollment(eid: str, active: bool = Query(True)):
@@ -608,7 +607,6 @@ def toggle_enrollment(eid: str, active: bool = Query(True)):
         raise HTTPException(status_code=404, detail="Enrollment tidak ditemukan")
     return up.data[0]
 
-# Admin/Mentor: get enrollments by user_id
 @app.get("/admin/enrollments", response_model=list[EnrollmentOut],
          dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
 def admin_list_enrollments(user_id: str = Query(..., description="target user id")):
@@ -626,7 +624,6 @@ def admin_list_enrollments(user_id: str = Query(..., description="target user id
 #                      MATERIALS
 # =========================================================
 
-# ADMIN/MENTOR: list materi (by class)
 @app.get("/admin/materials", response_model=list[MaterialOut],
          dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
 def list_materials_admin(class_id: str = Query(...)):
@@ -640,7 +637,6 @@ def list_materials_admin(class_id: str = Query(...)):
     res = q.execute()
     return res.data or []
 
-# ADMIN/MENTOR: create materi
 @app.post("/admin/materials", response_model=MaterialOut,
           dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
 def create_material_admin(payload: MaterialIn):
@@ -649,7 +645,6 @@ def create_material_admin(payload: MaterialIn):
     ins = sb.table("class_materials").insert(data_to_insert).execute()
     return ins.data[0]
 
-# ADMIN/MENTOR: update materi
 @app.patch("/admin/materials/{mid}", response_model=MaterialOut,
            dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
 def update_material_admin(mid: str, data: MaterialUpdate):
@@ -665,7 +660,6 @@ def update_material_admin(mid: str, data: MaterialUpdate):
         raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
     return up.data[0]
 
-# ADMIN/MENTOR: delete materi
 @app.delete("/admin/materials/{mid}",
             dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
 def delete_material_admin(mid: str):
@@ -675,7 +669,6 @@ def delete_material_admin(mid: str):
         raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
     return {"ok": True}
 
-# PESERTA & STAFF: list materi untuk kelas tertentu
 @app.get("/materials", response_model=list[MaterialOut], dependencies=[Depends(get_current_user)])
 def list_materials_user(class_id: str = Query(...), user=Depends(get_current_user)):
     sb = supabase()
@@ -683,7 +676,6 @@ def list_materials_user(class_id: str = Query(...), user=Depends(get_current_use
     role = (user or {}).get("role", "peserta")
     is_staff = role in ("mentor", "admin", "superadmin")
 
-    # Peserta: wajib punya enrollment aktif
     if not is_staff:
         enr = (
             sb.table("enrollments")
@@ -697,10 +689,6 @@ def list_materials_user(class_id: str = Query(...), user=Depends(get_current_use
         if not enr.data:
             raise HTTPException(status_code=403, detail="Tidak punya akses ke kelas ini")
 
-    # Materi yang ditampilkan:
-    # - Peserta: hanya yang visible
-    # - Staff: tetap gunakan visible=True supaya tampilan /peserta konsisten; 
-    #          kalau mau kelola/lihat semua gunakan endpoint admin (/admin/materials)
     q = (
         sb.table("class_materials")
         .select("*")
@@ -710,3 +698,120 @@ def list_materials_user(class_id: str = Query(...), user=Depends(get_current_use
     )
     res = q.execute()
     return res.data or []
+
+# =========================================================
+#                      FEEDBACK (Anon)
+# =========================================================
+
+@app.post("/feedback", response_model=FeedbackOut, dependencies=[Depends(get_current_user)])
+def create_or_update_feedback(payload: FeedbackIn, user=Depends(get_current_user)):
+    sb = supabase()
+
+    role = (user or {}).get("role", "peserta")
+    is_staff = role in ("mentor", "admin", "superadmin")
+
+    if not is_staff:
+        enr = (
+            sb.table("enrollments")
+            .select("id")
+            .eq("user_id", user["id"])
+            .eq("class_id", payload.class_id)
+            .eq("active", True)
+            .limit(1)
+            .execute()
+        )
+        if not enr.data:
+            raise HTTPException(status_code=403, detail="Tidak punya akses ke kelas ini")
+
+    existing = (
+        sb.table("feedbacks")
+        .select("id")
+        .eq("user_id", user["id"])
+        .eq("class_id", payload.class_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        fid = existing.data[0]["id"]
+        up = (
+            sb.table("feedbacks")
+            .update({"text": payload.text, "rating": payload.rating})
+            .eq("id", fid)
+            .execute()
+        )
+        row = up.data[0]
+    else:
+        ins = (
+            sb.table("feedbacks")
+            .insert({
+                "user_id": user["id"],
+                "class_id": payload.class_id,
+                "text": payload.text,
+                "rating": payload.rating,
+            })
+            .execute()
+        )
+        row = ins.data[0]
+
+    return {
+        "id": row["id"],
+        "class_id": row["class_id"],
+        "text": row["text"],
+        "rating": row.get("rating"),
+        "created_at": row.get("created_at"),
+    }
+
+@app.get("/feedback/me", response_model=list[FeedbackOut], dependencies=[Depends(get_current_user)])
+def my_feedbacks(user=Depends(get_current_user)):
+    sb = supabase()
+    res = (
+        sb.table("feedbacks")
+        .select("id, class_id, text, rating, created_at")
+        .eq("user_id", user["id"])
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return res.data or []
+
+@app.get(
+    "/admin/feedback",
+    response_model=list[AdminFeedbackOut],
+    dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))]
+)
+def list_feedback_admin(class_id: str = Query("", description="Optional filter: class_id atau kosong untuk semua")):
+    sb = supabase()
+    q = sb.table("feedbacks").select("id, class_id, text, rating, created_at").order("created_at", desc=True)
+    if class_id:
+        q = q.eq("class_id", class_id)
+    res = q.execute()
+    fb = res.data or []
+
+    cids = list({row["class_id"] for row in fb if row.get("class_id")})
+    title_map: dict[str, str] = {}
+    if cids:
+        c = sb.table("classes").select("id,title").in_("id", cids).execute()
+        for row in (c.data or []):
+            title_map[row["id"]] = row.get("title", "")
+
+    out = []
+    for row in fb:
+        out.append({
+            "id": row["id"],
+            "class_id": row["class_id"],
+            "text": row["text"],
+            "rating": row.get("rating"),
+            "created_at": row.get("created_at"),
+            "class_title": title_map.get(row["class_id"]),
+        })
+    return out
+
+@app.delete(
+    "/admin/feedback/{fid}",
+    dependencies=[Depends(require_roles("admin", "superadmin"))]
+)
+def delete_feedback_admin(fid: str):
+    sb = supabase()
+    delres = sb.table("feedbacks").delete().eq("id", fid).execute()
+    if not delres.data:
+        raise HTTPException(status_code=404, detail="Feedback tidak ditemukan")
+    return {"ok": True}
