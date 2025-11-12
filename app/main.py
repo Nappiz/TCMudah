@@ -16,6 +16,7 @@ from .schemas import (
     EnrollmentOut, EnrollmentSetIn,
     MaterialIn, MaterialOut, MaterialUpdate,
     FeedbackIn, FeedbackOut, AdminFeedbackOut,
+    ShortlinkIn, ShortlinkOut, ShortlinkUpdate, ShortlinkResolveOut,
 )
 from .auth import (
     hash_password, verify_password,
@@ -815,3 +816,132 @@ def delete_feedback_admin(fid: str):
     if not delres.data:
         raise HTTPException(status_code=404, detail="Feedback tidak ditemukan")
     return {"ok": True}
+
+# =========================================================
+#                      SHORTLINKS
+# =========================================================
+
+@app.get(
+    "/admin/shortlinks",
+    response_model=list[ShortlinkOut],
+    dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))],
+)
+def list_shortlinks_admin():
+    sb = supabase()
+    res = (
+        sb.table("shortlinks")
+        .select("*")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return res.data or []
+
+
+@app.post(
+    "/admin/shortlinks",
+    response_model=ShortlinkOut,
+    status_code=201,
+    dependencies=[Depends(require_roles("admin", "superadmin"))],
+)
+def create_shortlink(data: ShortlinkIn, current=Depends(get_current_user)):
+    sb = supabase()
+
+    # slug unik (case-insensitive)
+    exists = (
+        sb.table("shortlinks")
+        .select("id")
+        .ilike("slug", data.slug)
+        .limit(1)
+        .execute()
+    )
+    if exists.data:
+        raise HTTPException(status_code=400, detail="Slug sudah dipakai")
+
+    payload = data.model_dump()
+    payload["created_by"] = current["id"]
+
+    ins = sb.table("shortlinks").insert(payload).execute()
+    return ins.data[0]
+
+
+@app.patch(
+    "/admin/shortlinks/{sid}",
+    response_model=ShortlinkOut,
+    dependencies=[Depends(require_roles("admin", "superadmin"))],
+)
+def update_shortlink(sid: str, data: ShortlinkUpdate):
+    sb = supabase()
+    payload = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    # kalau slug diubah, cek unik
+    new_slug = payload.get("slug")
+    if new_slug:
+        exists = (
+            sb.table("shortlinks")
+            .select("id")
+            .ilike("slug", new_slug)
+            .neq("id", sid)
+            .limit(1)
+            .execute()
+        )
+        if exists.data:
+            raise HTTPException(status_code=400, detail="Slug sudah dipakai")
+
+    # kalau payload kosong, cuma get data sekarang
+    if not payload:
+        res = sb.table("shortlinks").select("*").eq("id", sid).limit(1).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Shortlink tidak ditemukan")
+        return res.data[0]
+
+    up = sb.table("shortlinks").update(payload).eq("id", sid).execute()
+    if not up.data:
+        raise HTTPException(status_code=404, detail="Shortlink tidak ditemukan")
+    return up.data[0]
+
+
+@app.delete(
+    "/admin/shortlinks/{sid}",
+    dependencies=[Depends(require_roles("admin", "superadmin"))],
+)
+def delete_shortlink(sid: str):
+    sb = supabase()
+    delres = sb.table("shortlinks").delete().eq("id", sid).execute()
+    if not delres.data:
+        raise HTTPException(status_code=404, detail="Shortlink tidak ditemukan")
+    return {"ok": True}
+
+
+@app.get("/shortlinks/{slug}", response_model=ShortlinkResolveOut)
+def resolve_shortlink(slug: str):
+    """
+    Endpoint yang dipakai FE di /m/[slug].
+    Return cuma { url }, FE yang urus redirect.
+    """
+    sb = supabase()
+    res = (
+        sb.table("shortlinks")
+        .select("id, url, clicks, active")
+        .ilike("slug", slug)
+        .eq("active", True)
+        .limit(1)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Shortlink tidak ditemukan")
+
+    row = res.data[0]
+
+    # increment clicks (best effort, kalau gagal ya udah)
+    try:
+        current_clicks = int(row.get("clicks") or 0)
+    except Exception:
+        current_clicks = 0
+
+    try:
+        sb.table("shortlinks").update({"clicks": current_clicks + 1}).eq("id", row["id"]).execute()
+    except Exception:
+        # jangan matiin request cuma gara-gara update clicks gagal
+        pass
+
+    return {"url": row["url"]}

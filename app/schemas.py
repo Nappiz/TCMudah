@@ -205,3 +205,36 @@ class FeedbackOut(BaseModel):
 
 class AdminFeedbackOut(FeedbackOut):
     class_title: Optional[str] = None
+
+# --- Shortlinks ---
+
+class ShortlinkBase(BaseModel):
+    slug: str = Field(..., min_length=1, max_length=64)
+    url: str
+    title: str | None = None
+    description: str | None = None
+    active: bool = True
+
+
+class ShortlinkIn(ShortlinkBase):
+    """Payload create"""
+    pass
+
+
+class ShortlinkUpdate(BaseModel):
+    slug: str | None = Field(None, min_length=1, max_length=64)
+    url: str | None = None
+    title: str | None = None
+    description: str | None = None
+    active: bool | None = None
+
+
+class ShortlinkOut(ShortlinkBase):
+    id: str
+    clicks: int = 0
+    created_by: str | None = None
+    created_at: str | None = None
+
+
+class ShortlinkResolveOut(BaseModel):
+    url: str
