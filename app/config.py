@@ -19,7 +19,7 @@ class Settings(BaseModel):
     BANK_NAME: str = "BANK_DEV"
     BANK_ACCOUNT: str = "7881292673"
     BANK_HOLDER: str = "BADRUZZAMAN NAFIZ"
-    GROUP_LINK: str = "https://chat.whatsapp.com/GtwoxPC0N2nGP9Ay8Wa13g?mode=wwt"
+    GROUP_LINK: str = "https://chat.whatsapp.com/JExaTob0k08CvPzJtSfN5l"
 
 
 def get_settings() -> Settings:
@@ -47,5 +47,5 @@ def get_settings() -> Settings:
         BANK_NAME=os.getenv("BANK_NAME", "BANK_DEV"),
         BANK_ACCOUNT=os.getenv("BANK_ACCOUNT", "7881292673"),
         BANK_HOLDER=os.getenv("BANK_HOLDER", "BADRUZZAMAN NAFIZ"),
-        GROUP_LINK=os.getenv("GROUP_LINK", "https://chat.whatsapp.com/GtwoxPC0N2nGP9Ay8Wa13g?mode=wwt"),
+        GROUP_LINK=os.getenv("GROUP_LINK", "https://chat.whatsapp.com/JExaTob0k08CvPzJtSfN5l"),
     )

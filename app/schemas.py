@@ -118,7 +118,8 @@ class CheckoutInfoOut(BaseModel):
     group_link: Optional[str] = None
 
 class OrderItemIn(BaseModel):
-    class_id: str
+    item_id: str
+    item_type: Literal["class", "package"] = "class"
     qty: int = Field(..., ge=1, le=99)
 
 class OrderCreateIn(BaseModel):
@@ -238,3 +239,26 @@ class ShortlinkOut(ShortlinkBase):
 
 class ShortlinkResolveOut(BaseModel):
     url: str
+
+# ===== Packages =====
+class PackageIn(BaseModel):
+    title: Text150
+    description: Text800
+    class_ids: list[str] = Field(..., min_length=1) 
+    price: NonNegInt
+    visible: bool = True
+
+class PackageUpdate(BaseModel):
+    title: Optional[Text150] = None
+    description: Optional[Text800] = None
+    class_ids: Optional[list[str]] = None
+    price: Optional[NonNegInt] = None
+    visible: Optional[bool] = None
+
+class PackageOut(PackageIn):
+    id: str
+    created_at: Optional[str] = None
+
+class EnrollmentPackageIn(BaseModel):
+    user_id: str
+    package_id: str

@@ -12,8 +12,9 @@ from .schemas import (
     TestimonialIn, TestimonialOut, TestimonialUpdate,
     MentorIn, MentorOut, MentorUpdate,
     ClassIn, ClassOut, ClassUpdate,
+    PackageIn, PackageOut, PackageUpdate,
     CheckoutInfoOut, OrderCreateIn, OrderOut, AdminOrderOut,
-    EnrollmentOut, EnrollmentSetIn,
+    EnrollmentOut, EnrollmentSetIn, EnrollmentPackageIn,
     MaterialIn, MaterialOut, MaterialUpdate,
     FeedbackIn, FeedbackOut, AdminFeedbackOut,
     ShortlinkIn, ShortlinkOut, ShortlinkUpdate, ShortlinkResolveOut,
@@ -446,18 +447,35 @@ def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Keranjang kosong")
 
     sb = supabase()
-    class_ids = [it.class_id for it in payload.items]
-    res = sb.table("classes").select("id, price, visible").in_("id", class_ids).execute()
-    price_by_id = {row["id"]: int(row["price"]) for row in (res.data or [])}
-    missing = [cid for cid in class_ids if cid not in price_by_id]
+    class_ids = [it.item_id for it in payload.items if it.item_type == "class"]
+    package_ids = [it.item_id for it in payload.items if it.item_type == "package"]
+    
+    price_by_id = {}
+    
+    if class_ids:
+        c_res = sb.table("classes").select("id, price, visible").in_("id", class_ids).execute()
+        for row in (c_res.data or []):
+            price_by_id[row["id"]] = int(row["price"])
+            
+    if package_ids:
+        p_res = sb.table("packages").select("id, price, visible").in_("id", package_ids).execute()
+        for row in (p_res.data or []):
+            price_by_id[row["id"]] = int(row["price"])
+
+    missing = [it.item_id for it in payload.items if it.item_id not in price_by_id]
     if missing:
-        raise HTTPException(status_code=400, detail=f"Kelas tidak ditemukan: {', '.join(missing)}")
+        raise HTTPException(status_code=400, detail=f"Item tidak ditemukan: {', '.join(missing)}")
 
     items_enriched = []
     total = 0
     for it in payload.items:
-        price = price_by_id[it.class_id]
-        items_enriched.append({"class_id": it.class_id, "qty": it.qty, "price": price})
+        price = price_by_id[it.item_id]
+        items_enriched.append({
+            "item_id": it.item_id, 
+            "item_type": it.item_type,
+            "qty": it.qty, 
+            "price": price
+        })
         total += price * it.qty
 
     ins = sb.table("orders").insert({
@@ -509,13 +527,38 @@ def list_orders_admin(status: str = Query("", description="optional filter: pend
         for u in (ures.data or []):
             users_map[u["id"]] = u
 
+    item_ids = set()
+    for o in orders:
+        for it in o.get("items", []):
+            iid = it.get("item_id") or it.get("class_id")
+            if iid:
+                item_ids.add(iid)
+                
+    item_titles = {}
+    if item_ids:
+        c_res = sb.table("classes").select("id, title").in_("id", list(item_ids)).execute()
+        for row in (c_res.data or []):
+            item_titles[row["id"]] = row["title"]
+        p_res = sb.table("packages").select("id, title").in_("id", list(item_ids)).execute()
+        for row in (p_res.data or []):
+            item_titles[row["id"]] = row["title"]
+
     out = []
     for o in orders:
         u = users_map.get(o["user_id"], {})
+        
+        enriched_items = []
+        for it in o.get("items", []):
+            new_it = it.copy()
+            iid = it.get("item_id") or it.get("class_id")
+            if iid:
+                new_it["item_title"] = item_titles.get(iid, "Unknown Item")
+            enriched_items.append(new_it)
+
         out.append({
             "id": o["id"],
             "user_id": o["user_id"],
-            "items": o.get("items", []),
+            "items": enriched_items,
             "total": o.get("total", 0),
             "status": o.get("status", "pending"),
             "proof_url": o.get("proof_url"),
@@ -563,6 +606,42 @@ def update_order_status(oid: str, data: OrderStatusIn):
 # =========================================================
 #                      ENROLLMENTS
 # =========================================================
+
+@app.post("/admin/enrollments/set-by-package", response_model=list[EnrollmentOut],
+          dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
+def set_user_enrollments_by_package(payload: EnrollmentPackageIn, current=Depends(get_current_user)):
+    sb = supabase()
+    
+    pkg_res = sb.table("packages").select("class_ids").eq("id", payload.package_id).limit(1).execute()
+    if not pkg_res.data:
+        raise HTTPException(status_code=404, detail="Paket tidak ditemukan")
+        
+    target_class_ids = pkg_res.data[0]["class_ids"]
+    if not target_class_ids:
+        raise HTTPException(status_code=400, detail="Paket ini kosong, tidak ada kelas di dalamnya")
+
+    existing = sb.table("enrollments").select("class_id").eq("user_id", payload.user_id).in_("class_id", target_class_ids).execute()
+    existing_class_ids = {row["class_id"] for row in (existing.data or [])}
+
+    classes_to_insert = [cid for cid in target_class_ids if cid not in existing_class_ids]
+
+    if classes_to_insert:
+        to_insert_data = [
+            {
+                "user_id": payload.user_id, 
+                "class_id": cid, 
+                "active": True, 
+                "assigned_by": current["id"]
+            } 
+            for cid in classes_to_insert
+        ]
+        sb.table("enrollments").insert(to_insert_data).execute()
+
+    if existing_class_ids:
+        sb.table("enrollments").update({"active": True}).eq("user_id", payload.user_id).in_("class_id", list(existing_class_ids)).execute()
+
+    final = sb.table("enrollments").select("*").eq("user_id", payload.user_id).order("created_at", desc=True).execute()
+    return final.data or []
 
 @app.get("/enrollments/me", response_model=list[EnrollmentOut], dependencies=[Depends(get_current_user)])
 def my_enrollments(user=Depends(get_current_user)):
@@ -620,6 +699,64 @@ def admin_list_enrollments(user_id: str = Query(..., description="target user id
         .execute()
     )
     return res.data or []
+
+# =========================================================
+#                         PACKAGES
+# =========================================================
+
+@app.get("/packages", response_model=list[PackageOut])
+def list_packages_public():
+    sb = supabase()
+    res = (
+        sb.table("packages")
+        .select("*")
+        .eq("visible", True)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return res.data or []
+
+@app.get("/admin/packages",
+         response_model=list[PackageOut],
+         dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
+def list_packages_admin():
+    sb = supabase()
+    res = sb.table("packages").select("*").order("created_at", desc=True).execute()
+    return res.data or []
+
+@app.post("/admin/packages",
+          response_model=PackageOut,
+          dependencies=[Depends(require_roles("admin", "superadmin"))])
+def create_package(data: PackageIn):
+    sb = supabase()
+    ins = sb.table("packages").insert(data.model_dump()).execute()
+    if not ins.data:
+        raise HTTPException(status_code=400, detail="Gagal membuat paket")
+    return ins.data[0]
+
+@app.patch("/admin/packages/{pid}",
+           response_model=PackageOut,
+           dependencies=[Depends(require_roles("admin", "superadmin"))])
+def update_package(pid: str, data: PackageUpdate):
+    sb = supabase()
+    payload = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not payload:
+        res = sb.table("packages").select("*").eq("id", pid).limit(1).execute()
+        return res.data[0]
+        
+    up = sb.table("packages").update(payload).eq("id", pid).execute()
+    if not up.data:
+        raise HTTPException(status_code=404, detail="Paket tidak ditemukan")
+    return up.data[0]
+
+@app.delete("/admin/packages/{pid}",
+            dependencies=[Depends(require_roles("admin", "superadmin"))])
+def delete_package(pid: str):
+    sb = supabase()
+    delres = sb.table("packages").delete().eq("id", pid).execute()
+    if not delres.data:
+        raise HTTPException(status_code=404, detail="Paket tidak ditemukan")
+    return {"ok": True}
 
 # =========================================================
 #                      MATERIALS
