@@ -36,14 +36,10 @@ def _cookie_attrs():
     fe_host = urlparse(fe).hostname or "localhost"
     is_local = fe_host in {"localhost", "127.0.0.1"}
 
-    if is_local:
-        same_site = "lax"   
-        secure    = False
-    else:
-        same_site = "none"  
-        secure    = True    
-
+    same_site = "lax"
+    secure = not is_local
     domain = None  
+    
     return same_site, secure, domain
 
 def set_jwt_cookie(resp: Response, token: str):
