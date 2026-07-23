@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from app.errors.exceptions import BadRequestError, NotFoundError
+
 from app.schemas.schemas import ShortlinkIn, ShortlinkOut, ShortlinkUpdate, ShortlinkResolveOut
 from app.core.deps import require_roles, get_current_user
 from app.crud import crud_shortlink
@@ -21,7 +23,7 @@ def list_shortlinks_admin():
 )
 def create_shortlink(data: ShortlinkIn, current=Depends(get_current_user)):
     if crud_shortlink.check_slug_exists(data.slug):
-        raise HTTPException(status_code=400, detail="Slug sudah dipakai")
+        raise BadRequestError(detail="Slug sudah dipakai")
 
     payload = data.model_dump()
     payload["created_by"] = current["id"]
@@ -39,17 +41,17 @@ def update_shortlink(sid: str, data: ShortlinkUpdate):
     new_slug = payload.get("slug")
     if new_slug:
         if crud_shortlink.check_slug_exists(new_slug, exclude_id=sid):
-            raise HTTPException(status_code=400, detail="Slug sudah dipakai")
+            raise BadRequestError(detail="Slug sudah dipakai")
 
     if not payload:
         res = crud_shortlink.get_shortlink_by_id(sid)
         if not res:
-            raise HTTPException(status_code=404, detail="Shortlink tidak ditemukan")
+            raise NotFoundError(detail="Shortlink tidak ditemukan")
         return res
 
     up = crud_shortlink.update_shortlink(sid, payload)
     if not up:
-        raise HTTPException(status_code=404, detail="Shortlink tidak ditemukan")
+        raise NotFoundError(detail="Shortlink tidak ditemukan")
     return up
 
 @router.delete(
@@ -59,14 +61,14 @@ def update_shortlink(sid: str, data: ShortlinkUpdate):
 def delete_shortlink(sid: str):
     delres = crud_shortlink.delete_shortlink(sid)
     if not delres:
-        raise HTTPException(status_code=404, detail="Shortlink tidak ditemukan")
+        raise NotFoundError(detail="Shortlink tidak ditemukan")
     return {"ok": True}
 
 @router.get("/shortlinks/{slug}", response_model=ShortlinkResolveOut)
 def resolve_shortlink(slug: str):
     row = crud_shortlink.resolve_shortlink(slug)
     if not row:
-        raise HTTPException(status_code=404, detail="Shortlink tidak ditemukan")
+        raise NotFoundError(detail="Shortlink tidak ditemukan")
 
     try:
         current_clicks = int(row.get("clicks") or 0)

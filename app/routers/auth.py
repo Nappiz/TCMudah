@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Response
+from app.errors.exceptions import BadRequestError
+
 from app.schemas.schemas import RegisterIn, LoginIn, UserOut
 from app.core.auth import hash_password, verify_password, create_access_token, set_jwt_cookie, clear_jwt_cookie
 from app.core.deps import get_current_user
@@ -11,10 +13,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def register(data: RegisterIn):
     exists = crud_user.get_user_by_email(data.email)
     if exists:
-        raise HTTPException(status_code=400, detail="Email sudah terdaftar")
+        raise BadRequestError(detail="Email sudah terdaftar")
 
     if len(data.password.encode("utf-8")) > 72:
-        raise HTTPException(status_code=400, detail="Password cannot be longer than 72 bytes")
+        raise BadRequestError(detail="Password cannot be longer than 72 bytes")
 
     ph = hash_password(data.password)
     user = crud_user.create_user(data.email, ph, data.full_name, data.nim)
@@ -31,10 +33,10 @@ def register(data: RegisterIn):
 def login(data: LoginIn, resp: Response):
     user = crud_user.get_user_by_email(data.email)
     if not user:
-        raise HTTPException(status_code=400, detail="Email atau password salah")
+        raise BadRequestError(detail="Email atau password salah")
 
     if not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(status_code=400, detail="Email atau password salah")
+        raise BadRequestError(detail="Email atau password salah")
 
     token = create_access_token(user["id"], user["role"])
     set_jwt_cookie(resp, token)

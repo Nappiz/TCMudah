@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from app.errors.exceptions import NotFoundError
+
 from app.schemas.schemas import ClassIn, ClassOut, ClassUpdate
 from app.core.deps import require_roles
 from app.crud import crud_class
@@ -25,7 +27,7 @@ def list_classes_admin():
 def get_class_admin(cid: str):
     data = crud_class.get_class_by_id(cid)
     if not data:
-        raise HTTPException(status_code=404, detail="Kelas tidak ditemukan")
+        raise NotFoundError(detail="Kelas tidak ditemukan")
     return data
 
 @router.post(
@@ -45,7 +47,7 @@ def update_class(cid: str, data: ClassUpdate):
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
     up = crud_class.update_class(cid, payload)
     if not up:
-        raise HTTPException(status_code=404, detail="Data tidak ditemukan")
+        raise NotFoundError(detail="Data tidak ditemukan")
     return up
 
 @router.delete(
@@ -55,5 +57,5 @@ def update_class(cid: str, data: ClassUpdate):
 def delete_class(cid: str):
     delres = crud_class.delete_class(cid)
     if not delres:
-        raise HTTPException(status_code=404, detail="Data tidak ditemukan")
+        raise NotFoundError(detail="Data tidak ditemukan")
     return {"ok": True}

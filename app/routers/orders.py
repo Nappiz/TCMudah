@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, Query, UploadFile, File
+from app.errors.exceptions import BadRequestError, NotFoundError
+
 from app.schemas.schemas import CheckoutInfoOut, OrderCreateIn, OrderOut, AdminOrderOut
 from pydantic import BaseModel
 from typing import Literal
@@ -27,7 +29,7 @@ def upload_payment_proof(file: UploadFile = File(...), user=Depends(get_current_
 @router.post("/orders", response_model=OrderOut, status_code=201, dependencies=[Depends(get_current_user)])
 def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
     if not payload.items:
-        raise HTTPException(status_code=400, detail="Keranjang kosong")
+        raise BadRequestError(detail="Keranjang kosong")
 
     class_ids = [it.item_id for it in payload.items if it.item_type == "class"]
     package_ids = [it.item_id for it in payload.items if it.item_type == "package"]
@@ -36,7 +38,7 @@ def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
 
     missing = [it.item_id for it in payload.items if it.item_id not in price_by_id]
     if missing:
-        raise HTTPException(status_code=400, detail=f"Item tidak ditemukan: {', '.join(missing)}")
+        raise BadRequestError(detail=f"Item tidak ditemukan: {', '.join(missing)}")
 
     items_enriched = []
     total = 0
@@ -124,7 +126,7 @@ class OrderStatusIn(BaseModel):
 def update_order_status(oid: str, data: OrderStatusIn):
     row = crud_order.update_order_status(oid, data.status)
     if not row:
-        raise HTTPException(status_code=404, detail="Order tidak ditemukan")
+        raise NotFoundError(detail="Order tidak ditemukan")
 
     u = crud_order.get_user_brief(row.get("user_id")) if row.get("user_id") else None
 

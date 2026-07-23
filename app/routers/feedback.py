@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
+from app.errors.exceptions import ForbiddenError, NotFoundError
+
 from app.schemas.schemas import FeedbackIn, FeedbackOut, AdminFeedbackOut
 from app.core.deps import require_roles, get_current_user
 from app.crud import crud_feedback
@@ -14,7 +16,7 @@ def create_or_update_feedback(payload: FeedbackIn, user=Depends(get_current_user
     if not is_staff:
         has_access = crud_material.check_user_enrollment(user["id"], payload.class_id)
         if not has_access:
-            raise HTTPException(status_code=403, detail="Tidak punya akses ke kelas ini")
+            raise ForbiddenError(detail="Tidak punya akses ke kelas ini")
 
     existing = crud_feedback.get_feedback_by_user_and_class(user["id"], payload.class_id)
     if existing:
@@ -63,5 +65,5 @@ def list_feedback_admin(class_id: str = Query("", description="Optional filter: 
 def delete_feedback_admin(fid: str):
     delres = crud_feedback.delete_feedback(fid)
     if not delres:
-        raise HTTPException(status_code=404, detail="Feedback tidak ditemukan")
+        raise NotFoundError(detail="Feedback tidak ditemukan")
     return {"ok": True}

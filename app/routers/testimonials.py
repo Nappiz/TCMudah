@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from app.errors.exceptions import NotFoundError
+
 from app.schemas.schemas import TestimonialIn, TestimonialOut, TestimonialUpdate
 from app.core.deps import require_roles
 from app.crud import crud_testimonial
@@ -34,7 +36,7 @@ def update_testimonial(tid: str, data: TestimonialUpdate):
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
     up = crud_testimonial.update_testimonial(tid, payload)
     if not up:
-        raise HTTPException(status_code=404, detail="Data tidak ditemukan")
+        raise NotFoundError(detail="Data tidak ditemukan")
     return up
 
 @router.delete(
@@ -44,5 +46,5 @@ def update_testimonial(tid: str, data: TestimonialUpdate):
 def delete_testimonial(tid: str):
     delres = crud_testimonial.delete_testimonial(tid)
     if not delres:
-        raise HTTPException(status_code=404, detail="Data tidak ditemukan")
+        raise NotFoundError(detail="Data tidak ditemukan")
     return {"ok": True}

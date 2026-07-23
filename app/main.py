@@ -41,6 +41,12 @@ app.add_middleware(
 def healthz():
     return {"ok": True}
 
+# ---------------- ERROR HANDLING ----------------
+from app.errors.exceptions import AppException
+from app.errors.handlers import app_exception_handler
+
+app.add_exception_handler(AppException, app_exception_handler)
+
 # ---------------- ROUTERS ----------------
 app.include_router(auth_router)
 app.include_router(router_me)

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from app.errors.exceptions import ForbiddenError, NotFoundError
+
 from app.schemas.schemas import UserOut, UpdateRoleIn
 from app.core.deps import get_current_user, require_roles
 from app.crud import crud_user
@@ -33,16 +35,16 @@ def list_users(current=Depends(get_current_user)):
 )
 def update_user_role(user_id: str, data: UpdateRoleIn, current=Depends(get_current_user)):
     if user_id == current["id"]:
-        raise HTTPException(status_code=403, detail="Tidak boleh mengubah role akun sendiri")
+        raise ForbiddenError(detail="Tidak boleh mengubah role akun sendiri")
         
     target = crud_user.get_user_by_id(user_id)
     if not target:
-        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+        raise NotFoundError(detail="User tidak ditemukan")
         
     if target["role"] == "superadmin" and current["role"] != "superadmin":
-        raise HTTPException(status_code=403, detail="Tidak boleh mengubah akun superadmin")
+        raise ForbiddenError(detail="Tidak boleh mengubah akun superadmin")
     if data.role == "superadmin" and current["role"] != "superadmin":
-        raise HTTPException(status_code=403, detail="Hanya superadmin yang dapat mengatur role superadmin")
+        raise ForbiddenError(detail="Hanya superadmin yang dapat mengatur role superadmin")
         
     user = crud_user.update_user_role(user_id, data.role)
     return {

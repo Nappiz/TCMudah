@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
+from app.errors.exceptions import ForbiddenError, NotFoundError
+
 from app.schemas.schemas import MaterialIn, MaterialOut, MaterialUpdate
 from app.core.deps import require_roles, get_current_user
 from app.crud import crud_material
@@ -23,11 +25,11 @@ def update_material_admin(mid: str, data: MaterialUpdate):
     if not payload:
         res = crud_material.get_material_by_id(mid)
         if not res:
-            raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
+            raise NotFoundError(detail="Materi tidak ditemukan")
         return res
     up = crud_material.update_material(mid, payload)
     if not up:
-        raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
+        raise NotFoundError(detail="Materi tidak ditemukan")
     return up
 
 @router.delete("/admin/materials/{mid}",
@@ -35,7 +37,7 @@ def update_material_admin(mid: str, data: MaterialUpdate):
 def delete_material_admin(mid: str):
     delres = crud_material.delete_material(mid)
     if not delres:
-        raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
+        raise NotFoundError(detail="Materi tidak ditemukan")
     return {"ok": True}
 
 @router.get("/materials", response_model=list[MaterialOut], dependencies=[Depends(get_current_user)])
@@ -46,6 +48,6 @@ def list_materials_user(class_id: str = Query(...), user=Depends(get_current_use
     if not is_staff:
         has_access = crud_material.check_user_enrollment(user["id"], class_id)
         if not has_access:
-            raise HTTPException(status_code=403, detail="Tidak punya akses ke kelas ini")
+            raise ForbiddenError(detail="Tidak punya akses ke kelas ini")
 
     return crud_material.get_user_materials(class_id)

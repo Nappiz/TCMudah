@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
+from app.errors.exceptions import BadRequestError, NotFoundError
+
 from app.schemas.schemas import EnrollmentOut, EnrollmentSetIn, EnrollmentPackageIn
 from app.core.deps import require_roles, get_current_user
 from app.crud import crud_enrollment
@@ -10,10 +12,10 @@ router = APIRouter(tags=["enrollments"])
 def set_user_enrollments_by_package(payload: EnrollmentPackageIn, current=Depends(get_current_user)):
     target_class_ids = crud_enrollment.get_package_class_ids(payload.package_id)
     if target_class_ids is None:
-        raise HTTPException(status_code=404, detail="Paket tidak ditemukan")
+        raise NotFoundError(detail="Paket tidak ditemukan")
         
     if not target_class_ids:
-        raise HTTPException(status_code=400, detail="Paket ini kosong, tidak ada kelas di dalamnya")
+        raise BadRequestError(detail="Paket ini kosong, tidak ada kelas di dalamnya")
 
     existing_class_ids = crud_enrollment.get_existing_enrollments(payload.user_id, target_class_ids)
     classes_to_insert = [cid for cid in target_class_ids if cid not in existing_class_ids]
@@ -61,7 +63,7 @@ def set_user_enrollments(payload: EnrollmentSetIn, current=Depends(get_current_u
 def toggle_enrollment(eid: str, active: bool = Query(True)):
     up = crud_enrollment.toggle_enrollment_active(eid, active)
     if not up:
-        raise HTTPException(status_code=404, detail="Enrollment tidak ditemukan")
+        raise NotFoundError(detail="Enrollment tidak ditemukan")
     return up
 
 @router.get("/admin/enrollments", response_model=list[EnrollmentOut],

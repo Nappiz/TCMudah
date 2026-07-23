@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, Query, Path
+from app.errors.exceptions import BadRequestError, NotFoundError
+
 from app.schemas.schemas import CurriculumIn, CurriculumOut, CurriculumUpdate
 from app.core.deps import require_roles
 from app.crud import crud_curriculum
@@ -17,7 +19,7 @@ def list_curriculum(q: str = Query("", alias="q")):
 def create_curriculum(data: CurriculumIn):
     exists = crud_curriculum.get_curriculum_by_code(data.code)
     if exists:
-        raise HTTPException(status_code=400, detail="Kode mata kuliah sudah ada")
+        raise BadRequestError(detail="Kode mata kuliah sudah ada")
     
     return crud_curriculum.create_curriculum(data.model_dump())
 
@@ -31,7 +33,7 @@ def update_curriculum(item_id: str = Path(...), data: CurriculumUpdate = ...):
     up = crud_curriculum.update_curriculum(item_id, payload)
     
     if not up:
-        raise HTTPException(status_code=404, detail="Data tidak ditemukan")
+        raise NotFoundError(detail="Data tidak ditemukan")
     return up
 
 @router.delete(
@@ -41,5 +43,5 @@ def update_curriculum(item_id: str = Path(...), data: CurriculumUpdate = ...):
 def delete_curriculum(item_id: str):
     delres = crud_curriculum.delete_curriculum(item_id)
     if not delres:
-        raise HTTPException(status_code=404, detail="Data tidak ditemukan")
+        raise NotFoundError(detail="Data tidak ditemukan")
     return {"ok": True}

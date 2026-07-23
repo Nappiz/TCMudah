@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from app.errors.exceptions import BadRequestError, NotFoundError
+
 from app.schemas.schemas import PackageIn, PackageOut, PackageUpdate
 from app.core.deps import require_roles
 from app.crud import crud_package
@@ -25,7 +27,7 @@ def list_packages_admin():
 def create_package(data: PackageIn):
     ins = crud_package.create_package(data.model_dump())
     if not ins:
-        raise HTTPException(status_code=400, detail="Gagal membuat paket")
+        raise BadRequestError(detail="Gagal membuat paket")
     return ins
 
 @router.patch(
@@ -38,12 +40,12 @@ def update_package(pid: str, data: PackageUpdate):
     if not payload:
         res = crud_package.get_package_by_id(pid)
         if not res:
-            raise HTTPException(status_code=404, detail="Paket tidak ditemukan")
+            raise NotFoundError(detail="Paket tidak ditemukan")
         return res
         
     up = crud_package.update_package(pid, payload)
     if not up:
-        raise HTTPException(status_code=404, detail="Paket tidak ditemukan")
+        raise NotFoundError(detail="Paket tidak ditemukan")
     return up
 
 @router.delete(
@@ -53,5 +55,5 @@ def update_package(pid: str, data: PackageUpdate):
 def delete_package(pid: str):
     delres = crud_package.delete_package(pid)
     if not delres:
-        raise HTTPException(status_code=404, detail="Paket tidak ditemukan")
+        raise NotFoundError(detail="Paket tidak ditemukan")
     return {"ok": True}
