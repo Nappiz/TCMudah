@@ -2,18 +2,29 @@ from app.core.supabase_client import supabase
 
 def get_public_classes():
     sb = supabase()
-    res = (
-        sb.table("classes")
-        .select("*")
-        .eq("visible", True)
-        .order("created_at", desc=True)
-        .execute()
-    )
+    # Find active batch
+    b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
+    active_batch_id = b_res.data[0]["id"] if b_res.data else None
+    
+    q = sb.table("classes").select("*").eq("visible", True).order("created_at", desc=True)
+    if active_batch_id:
+        q = q.eq("batch_id", active_batch_id)
+        
+    res = q.execute()
     return res.data or []
 
-def get_all_classes():
+def get_all_classes(batch_id: str = None):
     sb = supabase()
-    res = sb.table("classes").select("*").order("created_at", desc=True).execute()
+    
+    if batch_id is None:
+        b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
+        batch_id = b_res.data[0]["id"] if b_res.data else None
+        
+    q = sb.table("classes").select("*").order("created_at", desc=True)
+    if batch_id and batch_id != "all":
+        q = q.eq("batch_id", batch_id)
+        
+    res = q.execute()
     return res.data or []
 
 def get_class_by_id(cid: str):
@@ -30,6 +41,11 @@ def get_classes_by_ids(cids: list[str]):
 
 def create_class(data: dict):
     sb = supabase()
+    if not data.get("batch_id"):
+        b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
+        if b_res.data:
+            data["batch_id"] = b_res.data[0]["id"]
+            
     ins = sb.table("classes").insert(data).execute()
     return ins.data[0] if ins.data else None
 

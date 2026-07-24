@@ -61,3 +61,6 @@ app.include_router(packages_router)
 app.include_router(materials_router)
 app.include_router(feedback_router)
 app.include_router(shortlinks_router)
+
+from app.routers.batches import router as batches_router
+app.include_router(batches_router)

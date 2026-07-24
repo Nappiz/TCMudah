@@ -62,6 +62,19 @@ class TestimonialOut(TestimonialIn):
     id: str
     created_at: Optional[str] = None
 
+# ===== Batches =====
+class BatchIn(BaseModel):
+    name: str = Field(..., min_length=2, max_length=255)
+    is_active: bool = False
+
+class BatchUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=255)
+    is_active: Optional[bool] = None
+
+class BatchOut(BatchIn):
+    id: str
+    created_at: Optional[str] = None
+
 # ===== Mentor =====
 Text160 = Annotated[str, Field(min_length=1, max_length=160)]
 Year = Annotated[int, Field(ge=2000, le=2100)]
@@ -97,6 +110,7 @@ class ClassIn(BaseModel):
     curriculum_ids: IdList10
     price: NonNegInt
     visible: bool = True
+    batch_id: Optional[str] = None
 
 class ClassUpdate(BaseModel):
     title: Optional[Text150] = None
@@ -105,6 +119,7 @@ class ClassUpdate(BaseModel):
     curriculum_ids: Optional[IdList10] = None
     price: Optional[NonNegInt] = None
     visible: Optional[bool] = None
+    batch_id: Optional[str] = None
 
 class ClassOut(ClassIn):
     id: str
@@ -169,6 +184,7 @@ class MaterialBase(BaseModel):
     url: str
     visible: bool = True
     kind: MaterialType = Field(alias="type")
+    batch_id: Optional[str] = None
 
 class MaterialIn(MaterialBase):
     pass
@@ -247,6 +263,7 @@ class PackageIn(BaseModel):
     class_ids: list[str] = Field(..., min_length=1) 
     price: NonNegInt
     visible: bool = True
+    batch_id: Optional[str] = None
 
 class PackageUpdate(BaseModel):
     title: Optional[Text150] = None
@@ -254,6 +271,7 @@ class PackageUpdate(BaseModel):
     class_ids: Optional[list[str]] = None
     price: Optional[NonNegInt] = None
     visible: Optional[bool] = None
+    batch_id: Optional[str] = None
 
 class PackageOut(PackageIn):
     id: str

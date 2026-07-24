@@ -2,18 +2,29 @@ from app.core.supabase_client import supabase
 
 def get_public_packages():
     sb = supabase()
-    res = (
-        sb.table("packages")
-        .select("*")
-        .eq("visible", True)
-        .order("created_at", desc=True)
-        .execute()
-    )
+    # Find active batch
+    b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
+    active_batch_id = b_res.data[0]["id"] if b_res.data else None
+    
+    q = sb.table("packages").select("*").eq("visible", True).order("created_at", desc=True)
+    if active_batch_id:
+        q = q.eq("batch_id", active_batch_id)
+        
+    res = q.execute()
     return res.data or []
 
-def get_all_packages():
+def get_all_packages(batch_id: str = None):
     sb = supabase()
-    res = sb.table("packages").select("*").order("created_at", desc=True).execute()
+    
+    if batch_id is None:
+        b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
+        batch_id = b_res.data[0]["id"] if b_res.data else None
+        
+    q = sb.table("packages").select("*").order("created_at", desc=True)
+    if batch_id and batch_id != "all":
+        q = q.eq("batch_id", batch_id)
+        
+    res = q.execute()
     return res.data or []
 
 def get_package_by_id(pid: str):
@@ -30,6 +41,11 @@ def get_packages_by_ids(pids: list[str]):
 
 def create_package(data: dict):
     sb = supabase()
+    if not data.get("batch_id"):
+        b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
+        if b_res.data:
+            data["batch_id"] = b_res.data[0]["id"]
+            
     ins = sb.table("packages").insert(data).execute()
     return ins.data[0] if ins.data else None
 
