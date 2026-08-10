@@ -12,15 +12,15 @@ async def get_current_user(tcmudah_token: str | None = Cookie(default=None)):
         raise UnauthorizedError(detail="Not authenticated")
     try:
         payload = jwt.decode(tcmudah_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
-        uid = payload.get("sub")
+        return {
+            "id": payload.get("sub"),
+            "role": payload.get("role"),
+            "email": payload.get("email"),
+            "full_name": payload.get("full_name"),
+            "nim": payload.get("nim"),
+        }
     except jwt.PyJWTError:
         raise UnauthorizedError(detail="Invalid token")
-
-    sb = supabase()
-    res = sb.table("users").select("*").eq("id", uid).limit(1).execute()
-    if not res.data:
-        raise UnauthorizedError(detail="User not found")
-    return res.data[0]
 
 def require_roles(*roles: str):
     async def checker(user=Depends(get_current_user)):

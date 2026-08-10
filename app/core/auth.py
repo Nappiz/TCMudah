@@ -21,10 +21,10 @@ def verify_password(pw: str, hashed: str) -> bool:
         return False
 
 # ========== JWT helpers ==========
-def create_access_token(sub: str, role: str) -> str:
+def create_access_token(sub: str, role: str, email: str = "", full_name: str = "", nim: str | None = None) -> str:
     exp = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRES_MIN)
     return jwt.encode(
-        {"sub": sub, "role": role, "exp": exp},
+        {"sub": sub, "role": role, "email": email, "full_name": full_name, "nim": nim, "exp": exp},
         settings.JWT_SECRET,
         algorithm=settings.JWT_ALG,
     )

@@ -38,7 +38,7 @@ def login(data: LoginIn, resp: Response):
     if not verify_password(data.password, user["password_hash"]):
         raise BadRequestError(detail="Email atau password salah")
 
-    token = create_access_token(user["id"], user["role"])
+    token = create_access_token(user["id"], user["role"], user["email"], user["full_name"], user.get("nim"))
     set_jwt_cookie(resp, token)
 
     return {
