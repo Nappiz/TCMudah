@@ -1,10 +1,10 @@
 from app.core.supabase_client import supabase
+from app.crud.crud_batch import get_active_batch_id_cached
 
 def get_public_classes():
     sb = supabase()
     # Find active batch
-    b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
-    active_batch_id = b_res.data[0]["id"] if b_res.data else None
+    active_batch_id = get_active_batch_id_cached()
     
     q = sb.table("classes").select("*").eq("visible", True).order("created_at", desc=True)
     if active_batch_id:
@@ -17,8 +17,7 @@ def get_all_classes(batch_id: str = None):
     sb = supabase()
     
     if batch_id is None:
-        b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
-        batch_id = b_res.data[0]["id"] if b_res.data else None
+        batch_id = get_active_batch_id_cached()
         
     q = sb.table("classes").select("*").order("created_at", desc=True)
     if batch_id and batch_id != "all":
@@ -42,9 +41,9 @@ def get_classes_by_ids(cids: list[str]):
 def create_class(data: dict):
     sb = supabase()
     if not data.get("batch_id"):
-        b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
-        if b_res.data:
-            data["batch_id"] = b_res.data[0]["id"]
+        active_id = get_active_batch_id_cached()
+        if active_id:
+            data["batch_id"] = active_id
             
     ins = sb.table("classes").insert(data).execute()
     return ins.data[0] if ins.data else None

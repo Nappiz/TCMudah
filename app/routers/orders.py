@@ -53,7 +53,7 @@ def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
         total += price * it.qty
 
     row = crud_order.create_order(
-        user["id"], items_enriched, total, payload.proof_url, user["full_name"], payload.note
+        user["id"], items_enriched, total, payload.proof_url, payload.sender_name or user["full_name"], payload.note
     )
 
     return {
@@ -78,21 +78,23 @@ def my_orders(user=Depends(get_current_user)):
 def list_orders_admin(status: str = Query("", description="optional filter: pending/approved/rejected/expired")):
     orders = crud_order.get_admin_orders(status)
 
-    uids = list({o["user_id"] for o in orders if o.get("user_id")})
-    users_map = crud_order.get_users_by_ids(uids)
-
-    item_ids = set()
+    class_ids = set()
+    package_ids = set()
     for o in orders:
         for it in o.get("items", []):
             iid = it.get("item_id") or it.get("class_id")
+            itype = it.get("item_type") or "class"
             if iid:
-                item_ids.add(iid)
+                if itype == "package":
+                    package_ids.add(iid)
+                else:
+                    class_ids.add(iid)
                 
-    item_titles = crud_order.get_item_titles(list(item_ids))
+    item_titles = crud_order.get_item_titles(list(class_ids), list(package_ids))
 
     out = []
     for o in orders:
-        u = users_map.get(o["user_id"], {})
+        u = o.get("users") or {}
         
         enriched_items = []
         for it in o.get("items", []):
@@ -128,7 +130,7 @@ def update_order_status(oid: str, data: OrderStatusIn):
     if not row:
         raise NotFoundError(detail="Order tidak ditemukan")
 
-    u = crud_order.get_user_brief(row.get("user_id")) if row.get("user_id") else None
+    u = row.get("users") or {}
 
     return {
         "id": row["id"],
@@ -140,6 +142,6 @@ def update_order_status(oid: str, data: OrderStatusIn):
         "sender_name": row.get("sender_name"),
         "note": row.get("note"),
         "created_at": row.get("created_at"),
-        "user_name": (u or {}).get("full_name"),
-        "user_email": (u or {}).get("email"),
+        "user_name": u.get("full_name"),
+        "user_email": u.get("email"),
     }

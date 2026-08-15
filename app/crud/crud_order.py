@@ -47,38 +47,27 @@ def get_my_orders(user_id: str):
 
 def get_admin_orders(status: str = ""):
     sb = supabase()
-    q = sb.table("orders").select("*").order("created_at", desc=True)
+    q = sb.table("orders").select("*, users(full_name, email)").order("created_at", desc=True)
     if status:
         q = q.eq("status", status)
     res = q.execute()
     return res.data or []
 
-def get_users_by_ids(uids: list[str]):
+def get_item_titles(class_ids: list[str], package_ids: list[str]):
     sb = supabase()
-    if not uids:
-        return {}
-    ures = sb.table("users").select("id, full_name, email").in_("id", uids).execute()
-    return {u["id"]: u for u in (ures.data or [])}
-
-def get_item_titles(item_ids: list[str]):
-    sb = supabase()
-    if not item_ids:
-        return {}
     item_titles = {}
-    c_res = sb.table("classes").select("id, title").in_("id", item_ids).execute()
-    for row in (c_res.data or []):
-        item_titles[row["id"]] = row["title"]
-    p_res = sb.table("packages").select("id, title").in_("id", item_ids).execute()
-    for row in (p_res.data or []):
-        item_titles[row["id"]] = row["title"]
+    if class_ids:
+        c_res = sb.table("classes").select("id, title").in_("id", class_ids).execute()
+        for row in (c_res.data or []):
+            item_titles[row["id"]] = row["title"]
+    if package_ids:
+        p_res = sb.table("packages").select("id, title").in_("id", package_ids).execute()
+        for row in (p_res.data or []):
+            item_titles[row["id"]] = row["title"]
     return item_titles
 
 def update_order_status(oid: str, status: str):
     sb = supabase()
-    up = sb.table("orders").update({"status": status}).eq("id", oid).execute()
-    return up.data[0] if up.data else None
-
-def get_user_brief(user_id: str):
-    sb = supabase()
-    ures = sb.table("users").select("full_name,email").eq("id", user_id).limit(1).execute()
-    return ures.data[0] if ures.data else None
+    sb.table("orders").update({"status": status}).eq("id", oid).execute()
+    res = sb.table("orders").select("*, users(full_name, email)").eq("id", oid).execute()
+    return res.data[0] if res.data else None

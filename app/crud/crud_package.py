@@ -1,10 +1,10 @@
 from app.core.supabase_client import supabase
+from app.crud.crud_batch import get_active_batch_id_cached
 
 def get_public_packages():
     sb = supabase()
     # Find active batch
-    b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
-    active_batch_id = b_res.data[0]["id"] if b_res.data else None
+    active_batch_id = get_active_batch_id_cached()
     
     q = sb.table("packages").select("*").eq("visible", True).order("created_at", desc=True)
     if active_batch_id:
@@ -17,8 +17,7 @@ def get_all_packages(batch_id: str = None):
     sb = supabase()
     
     if batch_id is None:
-        b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
-        batch_id = b_res.data[0]["id"] if b_res.data else None
+        batch_id = get_active_batch_id_cached()
         
     q = sb.table("packages").select("*").order("created_at", desc=True)
     if batch_id and batch_id != "all":
@@ -42,9 +41,9 @@ def get_packages_by_ids(pids: list[str]):
 def create_package(data: dict):
     sb = supabase()
     if not data.get("batch_id"):
-        b_res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
-        if b_res.data:
-            data["batch_id"] = b_res.data[0]["id"]
+        active_id = get_active_batch_id_cached()
+        if active_id:
+            data["batch_id"] = active_id
             
     ins = sb.table("packages").insert(data).execute()
     return ins.data[0] if ins.data else None

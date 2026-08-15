@@ -51,3 +51,32 @@ def test_delete_batch(mock_supabase):
     mock_supabase.table().delete().eq().execute.return_value.data = [{"id": "b1"}]
     res = delete_batch("b1")
     assert res == [{"id": "b1"}]
+
+def test_get_active_batch_id_cached(mock_supabase):
+    from app.crud.crud_batch import get_active_batch_id_cached, invalidate_active_batch_cache
+    
+    # Invalidate cache first to ensure a clean state
+    invalidate_active_batch_cache()
+    
+    # Mock return value for active batch query
+    mock_supabase.table().select().eq().order().limit().execute.return_value.data = [
+        {"id": "b1"}
+    ]
+    
+    # First call: should query database
+    bid = get_active_batch_id_cached()
+    assert bid == "b1"
+    assert mock_supabase.table().select().eq().order().limit().execute.call_count == 1
+    
+    # Second call: should hit cache, database query count should still be 1
+    bid2 = get_active_batch_id_cached()
+    assert bid2 == "b1"
+    assert mock_supabase.table().select().eq().order().limit().execute.call_count == 1
+    
+    # Invalidate cache
+    invalidate_active_batch_cache()
+    
+    # Third call: should query database again, query count becomes 2
+    bid3 = get_active_batch_id_cached()
+    assert bid3 == "b1"
+    assert mock_supabase.table().select().eq().order().limit().execute.call_count == 2
