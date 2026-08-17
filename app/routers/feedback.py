@@ -18,11 +18,7 @@ def create_or_update_feedback(payload: FeedbackIn, user=Depends(get_current_user
         if not has_access:
             raise ForbiddenError(detail="Tidak punya akses ke kelas ini")
 
-    existing = crud_feedback.get_feedback_by_user_and_class(user["id"], payload.class_id)
-    if existing:
-        row = crud_feedback.update_feedback(existing["id"], payload.text, payload.rating)
-    else:
-        row = crud_feedback.create_feedback(user["id"], payload.class_id, payload.text, payload.rating)
+    row = crud_feedback.upsert_feedback(user["id"], payload.class_id, payload.text, payload.rating)
 
     return {
         "id": row["id"],

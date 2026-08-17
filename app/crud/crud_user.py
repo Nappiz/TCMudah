@@ -24,7 +24,7 @@ def create_user(email: str, password_hash: str, full_name: str, nim: str = None)
 
 def get_all_users():
     sb = supabase()
-    res = sb.table("users").select("*").order("created_at", desc=True).execute()
+    res = sb.table("users").select("id, email, full_name, nim, role, created_at").order("created_at", desc=True).execute()
     return res.data or []
 
 def update_user_role(user_id: str, role: str):

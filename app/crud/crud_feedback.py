@@ -36,6 +36,20 @@ def create_feedback(user_id: str, class_id: str, text: str, rating: int):
     )
     return ins.data[0] if ins.data else None
 
+def upsert_feedback(user_id: str, class_id: str, text: str, rating: int):
+    sb = supabase()
+    res = (
+        sb.table("feedbacks")
+        .upsert({
+            "user_id": user_id,
+            "class_id": class_id,
+            "text": text,
+            "rating": rating,
+        }, on_conflict="user_id,class_id")
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
 def get_my_feedbacks(user_id: str):
     sb = supabase()
     res = (

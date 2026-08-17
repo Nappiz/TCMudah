@@ -22,6 +22,9 @@ class Settings(BaseModel):
     GROUP_LINK: str = "https://chat.whatsapp.com/JExaTob0k08CvPzJtSfN5l"
 
 
+from functools import lru_cache
+
+@lru_cache()
 def get_settings() -> Settings:
     from dotenv import load_dotenv
     load_dotenv()

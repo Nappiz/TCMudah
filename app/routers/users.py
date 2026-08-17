@@ -13,10 +13,6 @@ router = APIRouter(prefix="/admin/users", tags=["users"])
 )
 def list_users(current=Depends(get_current_user)):
     data = crud_user.get_all_users()
-    me_id = current["id"]
-    top = [u for u in data if u["id"] == me_id]
-    rest = [u for u in data if u["id"] != me_id]
-    combined = top + rest
     return [
         {
             "id": u["id"],
@@ -25,7 +21,7 @@ def list_users(current=Depends(get_current_user)):
             "nim": u.get("nim"),
             "role": u["role"],
         }
-        for u in combined
+        for u in data
     ]
 
 @router.patch(
