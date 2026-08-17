@@ -11,18 +11,22 @@ router = APIRouter(prefix="/admin/users", tags=["users"])
     "",
     dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))],
 )
-def list_users(current=Depends(get_current_user)):
-    data = crud_user.get_all_users()
-    return [
-        {
-            "id": u["id"],
-            "email": u["email"],
-            "full_name": u["full_name"],
-            "nim": u.get("nim"),
-            "role": u["role"],
-        }
-        for u in data
-    ]
+def list_users(page: int = 1, limit: int = 20, search: str = "", role: str = "", current=Depends(get_current_user)):
+    offset = (page - 1) * limit
+    total, data = crud_user.get_paginated_users(limit=limit, offset=offset, search=search, role_filter=role)
+    return {
+        "total": total,
+        "data": [
+            {
+                "id": u["id"],
+                "email": u["email"],
+                "full_name": u["full_name"],
+                "nim": u.get("nim"),
+                "role": u["role"],
+            }
+            for u in data
+        ]
+    }
 
 @router.patch(
     "/{user_id}/role",
