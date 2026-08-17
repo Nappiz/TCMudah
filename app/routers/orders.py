@@ -73,10 +73,15 @@ def my_orders(user=Depends(get_current_user)):
     return crud_order.get_my_orders(user["id"])
 
 @router.get("/admin/orders",
-         response_model=list[AdminOrderOut],
          dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
-def list_orders_admin(status: str = Query("", description="optional filter: pending/approved/rejected/expired")):
-    orders = crud_order.get_admin_orders(status)
+def list_orders_admin(
+    page: int = 1,
+    limit: int = 20,
+    search: str = "",
+    status: str = Query("", description="optional filter: pending/approved/rejected/expired")
+):
+    offset = (page - 1) * limit
+    total, orders = crud_order.get_paginated_orders(limit=limit, offset=offset, search=search, status=status)
 
     class_ids = set()
     package_ids = set()
@@ -117,7 +122,10 @@ def list_orders_admin(status: str = Query("", description="optional filter: pend
             "user_name": u.get("full_name"),
             "user_email": u.get("email"),
         })
-    return out
+    return {
+        "total": total,
+        "data": out
+    }
 
 class OrderStatusIn(BaseModel):
     status: Literal["approved", "rejected", "expired"]

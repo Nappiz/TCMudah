@@ -53,6 +53,29 @@ def get_admin_orders(status: str = ""):
     res = q.execute()
     return res.data or []
 
+def get_paginated_orders(limit: int = 20, offset: int = 0, search: str = "", status: str = ""):
+    sb = supabase()
+    
+    q_count = sb.table("orders").select("id, users!inner(full_name)", count="exact")
+    if status:
+        q_count = q_count.eq("status", status)
+    if search:
+        search_term = f"%{search}%"
+        q_count = q_count.ilike("users.full_name", search_term)
+        
+    res_count = q_count.limit(1).execute()
+    total = res_count.count or 0
+
+    q_data = sb.table("orders").select("*, users!inner(full_name, email)").order("created_at", desc=True)
+    if status:
+        q_data = q_data.eq("status", status)
+    if search:
+        search_term = f"%{search}%"
+        q_data = q_data.ilike("users.full_name", search_term)
+        
+    res_data = q_data.range(offset, offset + limit - 1).execute()
+    return total, res_data.data or []
+
 def get_item_titles(class_ids: list[str], package_ids: list[str]):
     sb = supabase()
     item_titles = {}
