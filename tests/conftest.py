@@ -20,6 +20,7 @@ def mock_supabase(mocker):
     mocker.patch("app.crud.crud_material.supabase", return_value=mock_sb)
     mocker.patch("app.crud.crud_curriculum.supabase", return_value=mock_sb)
     mocker.patch("app.crud.crud_testimonial.supabase", return_value=mock_sb)
+    mocker.patch("app.crud.crud_notifications.supabase", return_value=mock_sb)
     return mock_sb
 
 @pytest.fixture

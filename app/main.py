@@ -16,6 +16,7 @@ from app.routers.packages import router as packages_router
 from app.routers.materials import router as materials_router
 from app.routers.feedback import router as feedback_router
 from app.routers.shortlinks import router as shortlinks_router
+from app.routers.notifications import router as notifications_router
 
 settings = get_settings()
 
@@ -61,6 +62,7 @@ app.include_router(packages_router)
 app.include_router(materials_router)
 app.include_router(feedback_router)
 app.include_router(shortlinks_router)
+app.include_router(notifications_router)
 
 from app.routers.batches import router as batches_router
 app.include_router(batches_router)
