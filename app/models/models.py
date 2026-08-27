@@ -3,7 +3,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.types import DateTime
 import enum
-from .db import Base
+from app.db.db import Base
 
 class UserRole(str, enum.Enum):
     superadmin = "superadmin"
@@ -21,3 +21,9 @@ class User(Base):
     nim = Column(String, nullable=True)
     role = Column(Enum(UserRole, name="user_role"), nullable=False, server_default="peserta")
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(String, nullable=False)

@@ -280,3 +280,17 @@ class PackageOut(PackageIn):
 class EnrollmentPackageIn(BaseModel):
     user_id: str
     package_id: str
+
+# ===== Settings =====
+class AppSettingBase(BaseModel):
+    key: str = Field(..., min_length=1, max_length=100)
+    value: str
+
+class AppSettingIn(AppSettingBase):
+    pass
+
+class AppSettingOut(AppSettingBase):
+    pass
+
+class AppSettingUpdate(BaseModel):
+    value: str

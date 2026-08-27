@@ -66,3 +66,6 @@ app.include_router(notifications_router)
 
 from app.routers.batches import router as batches_router
 app.include_router(batches_router)
+
+from app.routers.settings import router as settings_router
+app.include_router(settings_router)
