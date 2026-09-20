@@ -1,11 +1,60 @@
 from fastapi import APIRouter, Depends, Query
 from app.errors.exceptions import BadRequestError, NotFoundError
 
-from app.schemas.schemas import EnrollmentOut, EnrollmentSetIn, EnrollmentPackageIn
+from app.schemas.schemas import (
+    ActiveClassIdsOut,
+    EnrollmentBootstrapOut,
+    EnrollmentCandidatesOut,
+    EnrollmentOut,
+    EnrollmentPackageIn,
+    EnrollmentSetIn,
+)
 from app.core.deps import require_roles, get_current_user
 from app.crud import crud_enrollment
 
 router = APIRouter(tags=["enrollments"])
+
+
+@router.get(
+    "/admin/enrollments/bootstrap",
+    response_model=EnrollmentBootstrapOut,
+    dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))],
+)
+def enrollment_bootstrap(
+    user_id: str | None = Query(None),
+    q: str = Query("", max_length=120),
+    limit: int = Query(50, ge=1, le=100),
+    cursor: str | None = Query(None, max_length=512),
+):
+    try:
+        return crud_enrollment.get_enrollment_bootstrap(user_id, q, limit, cursor)
+    except ValueError as exc:
+        raise BadRequestError(detail=str(exc)) from exc
+
+
+@router.get(
+    "/admin/enrollments/candidates",
+    response_model=EnrollmentCandidatesOut,
+    dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))],
+)
+def enrollment_candidates(
+    q: str = Query("", max_length=120),
+    limit: int = Query(50, ge=1, le=100),
+    cursor: str | None = Query(None, max_length=512),
+):
+    try:
+        return crud_enrollment.get_enrollment_candidates(q, limit, cursor)
+    except ValueError as exc:
+        raise BadRequestError(detail=str(exc)) from exc
+
+
+@router.get(
+    "/admin/enrollments/active-class-ids",
+    response_model=ActiveClassIdsOut,
+    dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))],
+)
+def enrollment_active_class_ids(user_id: str = Query(...)):
+    return {"class_ids": crud_enrollment.get_active_class_ids(user_id)}
 
 @router.post("/admin/enrollments/set-by-package", response_model=list[EnrollmentOut],
           dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])

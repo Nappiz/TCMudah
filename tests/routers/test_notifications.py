@@ -43,13 +43,13 @@ class TestNotificationsRouter:
         }
         
         response = auth_client_superadmin.get(
-            "/admin/notifications/summary?last_seen_users=date1&last_seen_feedbacks=date2"
+            "/admin/notifications/summary?last_seen_users=2023-01-01T00:00:00Z&last_seen_feedbacks=2023-01-02T00:00:00Z"
         )
         
         assert response.status_code == 200
         mock_crud.assert_called_once_with(
-            last_seen_users="date1",
-            last_seen_feedbacks="date2"
+            last_seen_users="2023-01-01T00:00:00+00:00",
+            last_seen_feedbacks="2023-01-02T00:00:00+00:00"
         )
 
     @pytest.mark.parametrize(

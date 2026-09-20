@@ -21,6 +21,9 @@ def mock_supabase(mocker):
     mocker.patch("app.crud.crud_curriculum.supabase", return_value=mock_sb)
     mocker.patch("app.crud.crud_testimonial.supabase", return_value=mock_sb)
     mocker.patch("app.crud.crud_notifications.supabase", return_value=mock_sb)
+    mocker.patch("app.crud.crud_user.supabase", return_value=mock_sb)
+    mocker.patch("app.crud.crud_enrollment.supabase", return_value=mock_sb)
+    mocker.patch("app.crud.crud_dashboard.supabase", return_value=mock_sb)
     return mock_sb
 
 @pytest.fixture
@@ -71,4 +74,3 @@ def auth_client_user(test_client):
     app.dependency_overrides[get_current_user] = override_get_current_user_normal
     yield test_client
     app.dependency_overrides = {}
-

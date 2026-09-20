@@ -12,7 +12,7 @@ class RegisterIn(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=120)
     nim: Optional[str] = Field(None, max_length=50)
     email: EmailStr
-    password: str = Field(..., min_length=6, max_length=72)  
+    password: str = Field(..., min_length=6, max_length=72)
 
 class LoginIn(BaseModel):
     email: EmailStr
@@ -171,13 +171,13 @@ class EnrollmentOut(BaseModel):
 
 class EnrollmentSetIn(BaseModel):
     user_id: str
-    class_ids: List[str] 
+    class_ids: List[str]
 
 # --- Materials ---
 MaterialType = Literal["video", "ppt"]
 
 class MaterialBase(BaseModel):
-    model_config = ConfigDict(populate_by_name=True) 
+    model_config = ConfigDict(populate_by_name=True)
 
     class_id: str
     title: str
@@ -211,7 +211,7 @@ class FeedbackIn(BaseModel):
     rating: int | None = Field(default=None, ge=1, le=5)
 
     class Config:
-        populate_by_name = True  
+        populate_by_name = True
 
 class FeedbackOut(BaseModel):
     id: str
@@ -260,7 +260,7 @@ class ShortlinkResolveOut(BaseModel):
 class PackageIn(BaseModel):
     title: Text150
     description: Text800
-    class_ids: list[str] = Field(..., min_length=1) 
+    class_ids: list[str] = Field(..., min_length=1)
     price: NonNegInt
     visible: bool = True
     batch_id: Optional[str] = None
@@ -293,4 +293,120 @@ class AppSettingOut(AppSettingBase):
     pass
 
 class AppSettingUpdate(BaseModel):
-    value: str
+    value: str
+
+
+# ===== Optimized admin read models =====
+class EnrollmentParticipantOut(BaseModel):
+    id: str
+    full_name: str
+    email: EmailStr
+
+
+class EnrollmentClassOptionOut(BaseModel):
+    id: str
+    title: str
+
+
+class EnrollmentPackageOptionOut(BaseModel):
+    id: str
+    title: str
+    class_ids: list[str] = Field(default_factory=list)
+
+
+class EnrollmentCandidatesOut(BaseModel):
+    participants: list[EnrollmentParticipantOut]
+    next_cursor: Optional[str] = None
+    has_more: bool = False
+
+
+class EnrollmentBootstrapOut(EnrollmentCandidatesOut):
+    classes: list[EnrollmentClassOptionOut]
+    packages: list[EnrollmentPackageOptionOut]
+    selected_user: Optional[EnrollmentParticipantOut] = None
+    active_class_ids: list[str]
+
+
+class ActiveClassIdsOut(BaseModel):
+    class_ids: list[str]
+
+
+class NotificationsSummaryOut(BaseModel):
+    new_orders: int
+    new_users: int
+    new_feedbacks: int
+
+
+class DashboardSeriesPointOut(BaseModel):
+    key: str
+    value: int
+
+
+class DashboardTopClassOut(BaseModel):
+    id: str
+    title: str
+    count: int
+    revenue: int
+
+
+class DashboardStatsOut(BaseModel):
+    total_users: int
+    superadmin: int
+    admin: int
+    mentor: int
+    peserta: int
+    new_users_30d: int
+    total_curriculum: int
+    total_testimonials: int
+    visible_testimonials: int
+    hidden_testimonials: int
+    total_mentors: int
+    visible_mentors: int
+    total_classes: int
+    visible_classes: int
+    class_per_mentor: float
+    total_orders: int
+    pending_orders: int
+    approved_orders: int
+    rejected_orders: int
+    expired_orders: int
+    revenue_approved: int
+    revenue_30d: int
+    participants_active: int
+    aov: float
+    approval_rate: int
+    order_series: list[DashboardSeriesPointOut]
+    revenue_series: list[DashboardSeriesPointOut]
+
+
+class DashboardPeriodOut(BaseModel):
+    total_orders: int
+    pending_orders: int
+    approved_orders: int
+    rejected_orders: int
+    expired_orders: int
+    revenue_approved: int
+    aov: float
+    approval_rate: int
+    class_revenue: int
+    package_revenue: int
+    top_classes: list[DashboardTopClassOut]
+
+
+class DashboardOrderPreviewOut(BaseModel):
+    id: str
+    user_id: str
+    user_name: Optional[str] = None
+    user_email: Optional[EmailStr] = None
+    sender_name: Optional[str] = None
+    total: int
+    status: OrderStatus
+    created_at: Optional[str] = None
+
+
+class DashboardOverviewOut(BaseModel):
+    me: UserOut
+    stats: DashboardStatsOut
+    period: DashboardPeriodOut
+    pending_latest: list[DashboardOrderPreviewOut]
+    recent_orders: list[DashboardOrderPreviewOut]

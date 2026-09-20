@@ -45,14 +45,6 @@ def get_my_orders(user_id: str):
     res = sb.table("orders").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
     return res.data or []
 
-def get_admin_orders(status: str = ""):
-    sb = supabase()
-    q = sb.table("orders").select("*, users(full_name, email)").order("created_at", desc=True)
-    if status:
-        q = q.eq("status", status)
-    res = q.execute()
-    return res.data or []
-
 def get_paginated_orders(limit: int = 20, offset: int = 0, search: str = "", status: str = ""):
     sb = supabase()
     
