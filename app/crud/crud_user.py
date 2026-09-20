@@ -1,14 +1,18 @@
 from app.core.supabase_client import supabase
 from app.core.rpc import unwrap_rpc_object
 
+
+USER_AUTH_COLUMNS = "id,email,password_hash,full_name,nim,role,created_at"
+USER_ADMIN_COLUMNS = "id,email,full_name,nim,role,created_at"
+
 def get_user_by_email(email: str):
     sb = supabase()
-    res = sb.table("users").select("*").eq("email", email).limit(1).execute()
+    res = sb.table("users").select(USER_AUTH_COLUMNS).eq("email", email).limit(1).execute()
     return res.data[0] if res.data else None
 
 def get_user_by_id(user_id: str):
     sb = supabase()
-    res = sb.table("users").select("*").eq("id", user_id).limit(1).execute()
+    res = sb.table("users").select(USER_ADMIN_COLUMNS).eq("id", user_id).limit(1).execute()
     return res.data[0] if res.data else None
 
 def create_user(email: str, password_hash: str, full_name: str, nim: str = None):

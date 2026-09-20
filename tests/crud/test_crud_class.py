@@ -20,6 +20,7 @@ from app.crud.crud_class import (
     create_class,
     update_class,
     delete_class,
+    CLASS_COLUMNS,
 )
 
 class TestCrudClass:
@@ -55,7 +56,7 @@ class TestCrudClass:
         # Behavioral Verification
         mock_active_batch.assert_called_once()
         mock_supabase.table.assert_called_once_with("classes")
-        mock_table.select.assert_called_once_with("*")
+        mock_table.select.assert_called_once_with(CLASS_COLUMNS)
         mock_select.eq.assert_called_once_with("visible", True)
         mock_eq1.order.assert_called_once_with("created_at", desc=True)
         mock_order.eq.assert_called_once_with("batch_id", "b1")
@@ -86,7 +87,7 @@ class TestCrudClass:
         
         assert len(classes) == 2
         mock_supabase.table.assert_called_once_with("classes")
-        mock_table.select.assert_called_once_with("*")
+        mock_table.select.assert_called_once_with(CLASS_COLUMNS)
         mock_select.order.assert_called_once_with("created_at", desc=True)
         
         if expected_batch_filter:

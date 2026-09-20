@@ -1,10 +1,13 @@
 from app.core.supabase_client import supabase
 
+
+MENTOR_COLUMNS = "id,name,angkatan,achievements,visible,created_at"
+
 def get_public_mentors():
     sb = supabase()
     res = (
         sb.table("mentors")
-        .select("*")
+        .select(MENTOR_COLUMNS)
         .eq("visible", True)
         .order("created_at", desc=True)
         .execute()
@@ -13,7 +16,7 @@ def get_public_mentors():
 
 def get_all_mentors():
     sb = supabase()
-    res = sb.table("mentors").select("*").order("created_at", desc=True).execute()
+    res = sb.table("mentors").select(MENTOR_COLUMNS).order("created_at", desc=True).execute()
     return res.data or []
 
 def create_mentor(data: dict):

@@ -1,88 +1,73 @@
+from app.core.config import get_settings
+from app.core.rpc import unwrap_rpc_object
 from app.core.supabase_client import supabase
 from uuid import uuid4
+
+
+ORDER_COLUMNS = "id,user_id,items,total,status,proof_url,sender_name,note,created_at"
+settings = get_settings()
 
 def upload_payment_proof(user_id: str, file_name: str, file_data: bytes, content_type: str):
     sb = supabase()
     ext = (file_name or "").split(".")[-1].lower() or "jpg"
     key = f"{user_id}/{uuid4().hex}.{ext}"
-    sb.storage.from_("payments").upload(
+    sb.storage.from_(settings.PAYMENTS_BUCKET).upload(
         path=key,
         file=file_data,
         file_options={"contentType": content_type, "upsert": "true"},
     )
-    pub = sb.storage.from_("payments").get_public_url(key)
+    pub = sb.storage.from_(settings.PAYMENTS_BUCKET).get_public_url(key)
     return pub
 
-def get_class_and_package_prices(class_ids: list[str], package_ids: list[str]):
-    sb = supabase()
-    price_by_id = {}
-    if class_ids:
-        c_res = sb.table("classes").select("id, price, visible").in_("id", class_ids).execute()
-        for row in (c_res.data or []):
-            price_by_id[row["id"]] = int(row["price"])
-            
-    if package_ids:
-        p_res = sb.table("packages").select("id, price, visible").in_("id", package_ids).execute()
-        for row in (p_res.data or []):
-            price_by_id[row["id"]] = int(row["price"])
-    return price_by_id
+def create_order_transactional(
+    user_id: str,
+    items: list[dict],
+    proof_url: str | None,
+    sender_name: str,
+    note: str | None,
+):
+    response = supabase().rpc(
+        "create_order_transactional",
+        {
+            "p_user_id": user_id,
+            "p_items": items,
+            "p_proof_url": proof_url,
+            "p_sender_name": sender_name,
+            "p_note": note,
+        },
+    ).execute()
+    return unwrap_rpc_object(response.data, rpc_name="create_order_transactional")
 
-def create_order(user_id: str, items_enriched: list, total: int, proof_url: str, sender_name: str, note: str):
+def get_my_orders(user_id: str, limit: int = 50, offset: int = 0):
     sb = supabase()
-    ins = sb.table("orders").insert({
-        "user_id": user_id,
-        "items": items_enriched,
-        "total": total,
-        "status": "pending",
-        "proof_url": proof_url,
-        "sender_name": sender_name,
-        "note": note,
-    }).execute()
-    return ins.data[0] if ins.data else None
-
-def get_my_orders(user_id: str):
-    sb = supabase()
-    res = sb.table("orders").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    res = (
+        sb.table("orders")
+        .select(ORDER_COLUMNS)
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
+        .execute()
+    )
     return res.data or []
 
 def get_paginated_orders(limit: int = 20, offset: int = 0, search: str = "", status: str = ""):
-    sb = supabase()
-    
-    q_count = sb.table("orders").select("id, users!inner(full_name)", count="exact")
-    if status:
-        q_count = q_count.eq("status", status)
-    if search:
-        search_term = f"%{search}%"
-        q_count = q_count.ilike("users.full_name", search_term)
-        
-    res_count = q_count.limit(1).execute()
-    total = res_count.count or 0
-
-    q_data = sb.table("orders").select("*, users!inner(full_name, email)").order("created_at", desc=True)
-    if status:
-        q_data = q_data.eq("status", status)
-    if search:
-        search_term = f"%{search}%"
-        q_data = q_data.ilike("users.full_name", search_term)
-        
-    res_data = q_data.range(offset, offset + limit - 1).execute()
-    return total, res_data.data or []
-
-def get_item_titles(class_ids: list[str], package_ids: list[str]):
-    sb = supabase()
-    item_titles = {}
-    if class_ids:
-        c_res = sb.table("classes").select("id, title").in_("id", class_ids).execute()
-        for row in (c_res.data or []):
-            item_titles[row["id"]] = row["title"]
-    if package_ids:
-        p_res = sb.table("packages").select("id, title").in_("id", package_ids).execute()
-        for row in (p_res.data or []):
-            item_titles[row["id"]] = row["title"]
-    return item_titles
+    response = supabase().rpc(
+        "admin_paginated_orders",
+        {
+            "p_limit": max(1, min(limit, 100)),
+            "p_offset": max(0, offset),
+            "p_search": search.strip() or None,
+            "p_status": status or None,
+        },
+    ).execute()
+    payload = unwrap_rpc_object(response.data, rpc_name="admin_paginated_orders")
+    return int(payload.get("total") or 0), payload.get("data") or []
 
 def update_order_status(oid: str, status: str):
-    sb = supabase()
-    sb.table("orders").update({"status": status}).eq("id", oid).execute()
-    res = sb.table("orders").select("*, users(full_name, email)").eq("id", oid).execute()
-    return res.data[0] if res.data else None
+    response = supabase().rpc(
+        "admin_update_order_status",
+        {"p_order_id": oid, "p_status": status},
+    ).execute()
+    if response.data is None:
+        return None
+    return unwrap_rpc_object(response.data, rpc_name="admin_update_order_status")

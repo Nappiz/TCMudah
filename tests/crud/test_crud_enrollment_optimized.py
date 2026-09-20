@@ -4,6 +4,8 @@ from app.crud.crud_enrollment import (
     get_active_class_ids,
     get_enrollment_bootstrap,
     get_enrollment_candidates,
+    set_package_enrollments,
+    set_user_enrollments,
 )
 
 
@@ -61,3 +63,34 @@ def test_active_class_ids_selects_only_required_column(mock_supabase):
     assert get_active_class_ids("user-1") == ["class-1"]
     mock_supabase.table.assert_called_once_with("enrollments")
     mock_supabase.table.return_value.select.assert_called_once_with("class_id")
+
+
+def test_set_user_enrollments_is_one_transactional_rpc(mock_supabase):
+    response = MagicMock(data=[])
+    mock_supabase.rpc.return_value.execute.return_value = response
+
+    assert set_user_enrollments("user-1", [], "admin-1") == []
+    mock_supabase.rpc.assert_called_once_with(
+        "admin_set_user_enrollments",
+        {
+            "p_user_id": "user-1",
+            "p_class_ids": [],
+            "p_assigned_by": "admin-1",
+        },
+    )
+    mock_supabase.table.assert_not_called()
+
+
+def test_set_package_enrollments_is_one_transactional_rpc(mock_supabase):
+    response = MagicMock(data=[])
+    mock_supabase.rpc.return_value.execute.return_value = response
+
+    assert set_package_enrollments("user-1", "package-1", "admin-1") == []
+    mock_supabase.rpc.assert_called_once_with(
+        "admin_set_package_enrollments",
+        {
+            "p_user_id": "user-1",
+            "p_package_id": "package-1",
+            "p_assigned_by": "admin-1",
+        },
+    )

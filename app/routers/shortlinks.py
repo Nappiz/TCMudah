@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from app.errors.exceptions import BadRequestError, NotFoundError
 
-from app.schemas.schemas import ShortlinkIn, ShortlinkOut, ShortlinkUpdate, ShortlinkResolveOut
+from app.schemas.schemas import PaginatedShortlinksOut, ShortlinkIn, ShortlinkOut, ShortlinkUpdate, ShortlinkResolveOut
 from app.core.deps import require_roles, get_current_user
 from app.crud import crud_shortlink
 
@@ -9,11 +9,18 @@ router = APIRouter(tags=["shortlinks"])
 
 @router.get(
     "/admin/shortlinks",
-    response_model=list[ShortlinkOut],
+    response_model=PaginatedShortlinksOut,
     dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))],
 )
-def list_shortlinks_admin():
-    return crud_shortlink.get_admin_shortlinks()
+def list_shortlinks_admin(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    search: str = Query("", max_length=120),
+):
+    total, data = crud_shortlink.get_admin_shortlinks(
+        limit=limit, offset=(page - 1) * limit, search=search
+    )
+    return {"total": total, "data": data}
 
 @router.post(
     "/admin/shortlinks",

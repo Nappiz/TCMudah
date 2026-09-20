@@ -1,10 +1,13 @@
 from app.core.supabase_client import supabase
 
+
+MATERIAL_COLUMNS = "id,class_id,title,url,visible,type,batch_id,created_at"
+
 def get_admin_materials(class_id: str):
     sb = supabase()
     q = (
         sb.table("class_materials")
-        .select("*")
+        .select(MATERIAL_COLUMNS)
         .eq("class_id", class_id)
         .order("created_at", desc=True)
     )
@@ -18,7 +21,7 @@ def create_material(data: dict):
 
 def get_material_by_id(mid: str):
     sb = supabase()
-    res = sb.table("class_materials").select("*").eq("id", mid).limit(1).execute()
+    res = sb.table("class_materials").select(MATERIAL_COLUMNS).eq("id", mid).limit(1).execute()
     return res.data[0] if res.data else None
 
 def update_material(mid: str, data: dict):
@@ -35,7 +38,7 @@ def get_user_materials(class_id: str):
     sb = supabase()
     q = (
         sb.table("class_materials")
-        .select("*")
+        .select(MATERIAL_COLUMNS)
         .eq("class_id", class_id)
         .eq("visible", True)
         .order("created_at", desc=True)

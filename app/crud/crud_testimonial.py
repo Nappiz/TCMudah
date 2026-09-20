@@ -1,10 +1,13 @@
 from app.core.supabase_client import supabase
 
+
+TESTIMONIAL_COLUMNS = "id,name,text,visible,created_at"
+
 def get_public_testimonials():
     sb = supabase()
     res = (
         sb.table("testimonials")
-        .select("*")
+        .select(TESTIMONIAL_COLUMNS)
         .eq("visible", True)
         .order("created_at", desc=True)
         .execute()
@@ -13,7 +16,7 @@ def get_public_testimonials():
 
 def get_all_testimonials():
     sb = supabase()
-    res = sb.table("testimonials").select("*").order("created_at", desc=True).execute()
+    res = sb.table("testimonials").select(TESTIMONIAL_COLUMNS).order("created_at", desc=True).execute()
     return res.data or []
 
 def create_testimonial(data: dict):

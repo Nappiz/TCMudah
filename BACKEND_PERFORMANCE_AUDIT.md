@@ -4,12 +4,14 @@ Tanggal audit: 20 September 2026
 Scope: `tcmudahbe` dan pola pemanggilan API di `TCMudahFE`  
 Jenis audit: static code audit; belum memakai production trace, query plan, atau schema/index aktual dari Supabase
 
-## Status implementasi PERF-01 sampai PERF-05
+## Status implementasi PERF-01 sampai PERF-10
 
 Status per 20 September 2026: **selesai di source code dan migration**. Migration
-[`202609200001_perf_01_05.sql`](./supabase/migrations/202609200001_perf_01_05.sql)
-harus diterapkan ke database Supabase sebelum backend/frontend baru dipasang. Bagian-bagian
-audit setelah tabel ini tetap dipertahankan sebagai catatan kondisi awal dan alasan desain.
+[`202609200001_perf_01_05.sql`](./supabase/migrations/202609200001_perf_01_05.sql) dan
+[`202609200002_perf_06_10.sql`](./supabase/migrations/202609200002_perf_06_10.sql)
+harus diterapkan berurutan ke database Supabase sebelum backend/frontend baru dipasang.
+Bagian-bagian audit setelah tabel ini tetap dipertahankan sebagai catatan kondisi awal
+dan alasan desain.
 
 | ID | Status | Implementasi akhir |
 |---|---|---|
@@ -18,10 +20,18 @@ audit setelah tabel ini tetap dipertahankan sebagai catatan kondisi awal dan ala
 | PERF-03 | Selesai | Kandidat enrollment dicari dan dipaginasi dengan cursor melalui `admin_enrollment_candidates`; eligibility memakai SQL `EXISTS`, tanpa mengunduh semua approved order. Jalur frontend lama `limit=10000` sudah dihapus. |
 | PERF-04 | Selesai | Summary notification memakai satu RPC agregat, satu provider bersama, polling 60 detik, dan polling berhenti saat tab tidak terlihat. |
 | PERF-05 | Selesai | Overview memakai satu `GET /admin/dashboard/overview`; statistik, filter periode, time series, revenue split, dan top class dihitung di PostgreSQL. Response list dibatasi untuk pending/recent order. |
+| PERF-06 | Selesai | Middleware ASGI mengirim request ID, cold-instance marker, query count, dan `Server-Timing`; wrapper Supabase mencatat durasi/row setiap call; log JSON aman dan endpoint admin menyediakan p50/p95/p99 per route untuk instance aktif. |
+| PERF-07 | Selesai | Seluruh `select("*")` dihapus, projection dibuat per use case, dan list yang tumbuh (users, orders, feedbacks, shortlinks) dipaginasi dengan batas maksimum 100. History order user juga dibatasi dengan limit/offset. |
+| PERF-08 | Selesai | Save enrollment user dan package masing-masing memakai satu RPC transaksional. Input divalidasi di API dan database; duplikat legacy dikonsolidasikan sebelum unique index `(user_id, class_id)` dipasang. |
+| PERF-09 | Selesai | Order list/count/title memakai satu RPC; create dan status update memakai RPC atomik; item tak terlihat ditolak; title/price disnapshot; `order_items` menjadi sumber analytics tanpa ekspansi JSON saat request. |
+| PERF-10 | Selesai | Public catalog memakai satu `GET /catalog` → satu RPC, membaca active batch sekali, projection eksplisit, ETag, conditional 304, serta cache browser/CDN dengan stale-while-revalidate dan surrogate key. Semua consumer katalog utama memakai endpoint gabungan. |
 
-Coverage regresi ditambahkan pada CRUD dan router baru. Verifikasi lokal terakhir:
-106 test backend lulus, TypeScript type-check lulus, Biome check lulus, dan Next.js
-production build lulus.
+Coverage regresi ditambahkan pada CRUD, middleware, dan router baru. Prosedur rollout,
+observability, baseline, serta rollback dijelaskan di
+[`PERFORMANCE_OPERATIONS.md`](./PERFORMANCE_OPERATIONS.md).
+Verifikasi lokal terakhir: 127 test backend lulus, seluruh modul Python berhasil
+dikompilasi, TypeScript type-check dan Biome check lulus, serta Next.js production
+build selesai tanpa error.
 
 ## Ringkasan eksekutif
 

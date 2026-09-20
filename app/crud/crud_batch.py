@@ -1,36 +1,43 @@
 from app.core.supabase_client import supabase
 import time
+import threading
 
-_active_batch_cache = {"id": None, "timestamp": 0.0}
+_active_batch_cache = {"id": None, "expires_at": 0.0}
+_active_batch_cache_lock = threading.Lock()
 CACHE_TTL = 60.0  # seconds
+BATCH_COLUMNS = "id,name,is_active,created_at"
 
 def get_active_batch_id_cached() -> str | None:
     global _active_batch_cache
-    now = time.time()
-    if now - _active_batch_cache["timestamp"] < CACHE_TTL and _active_batch_cache["id"] is not None:
+    now = time.monotonic()
+    if now < _active_batch_cache["expires_at"]:
         return _active_batch_cache["id"]
-        
-    sb = supabase()
-    res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
-    bid = res.data[0]["id"] if res.data else None
-    
-    _active_batch_cache["id"] = bid
-    _active_batch_cache["timestamp"] = now
-    return bid
+
+    with _active_batch_cache_lock:
+        now = time.monotonic()
+        if now < _active_batch_cache["expires_at"]:
+            return _active_batch_cache["id"]
+
+        sb = supabase()
+        res = sb.table("batches").select("id").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
+        bid = res.data[0]["id"] if res.data else None
+        _active_batch_cache["id"] = bid
+        _active_batch_cache["expires_at"] = now + CACHE_TTL
+        return bid
 
 def invalidate_active_batch_cache():
     global _active_batch_cache
     _active_batch_cache["id"] = None
-    _active_batch_cache["timestamp"] = 0.0
+    _active_batch_cache["expires_at"] = 0.0
 
 def get_all_batches():
     sb = supabase()
-    res = sb.table("batches").select("*").order("created_at", desc=True).execute()
+    res = sb.table("batches").select(BATCH_COLUMNS).order("created_at", desc=True).execute()
     return res.data or []
 
 def get_active_batch():
     sb = supabase()
-    res = sb.table("batches").select("*").eq("is_active", True).order("created_at", desc=True).limit(1).execute()
+    res = sb.table("batches").select(BATCH_COLUMNS).eq("is_active", True).order("created_at", desc=True).limit(1).execute()
     return res.data[0] if res.data else None
 
 def create_batch(data: dict):

@@ -19,6 +19,7 @@ from app.crud.crud_material import (
     delete_material,
     get_user_materials,
     check_user_enrollment,
+    MATERIAL_COLUMNS,
 )
 
 class TestCrudMaterial:
@@ -39,7 +40,7 @@ class TestCrudMaterial:
         
         assert len(res) == 1
         mock_supabase.table.assert_called_once_with("class_materials")
-        mock_table.select.assert_called_once_with("*")
+        mock_table.select.assert_called_once_with(MATERIAL_COLUMNS)
         mock_select.eq.assert_called_once_with("class_id", "c1")
         mock_eq.order.assert_called_once_with("created_at", desc=True)
 
@@ -56,7 +57,7 @@ class TestCrudMaterial:
         
         assert len(res) == 1
         mock_supabase.table.assert_called_once_with("class_materials")
-        mock_table.select.assert_called_once_with("*")
+        mock_table.select.assert_called_once_with(MATERIAL_COLUMNS)
         mock_select.eq.assert_called_once_with("class_id", "c1")
         mock_eq1.eq.assert_called_once_with("visible", True)
         mock_eq2.order.assert_called_once_with("created_at", desc=True)
@@ -116,7 +117,7 @@ class TestCrudMaterial:
         
         assert res["id"] == "m1"
         mock_supabase.table.assert_called_once_with("class_materials")
-        mock_table.select.assert_called_once_with("*")
+        mock_table.select.assert_called_once_with(MATERIAL_COLUMNS)
         mock_select.eq.assert_called_once_with("id", "m1")
         mock_eq.limit.assert_called_once_with(1)
 

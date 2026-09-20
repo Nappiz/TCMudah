@@ -44,3 +44,19 @@ def test_active_class_ids_returns_minimal_projection(auth_client_admin):
         assert response.status_code == 200
         assert response.json() == {"class_ids": ["class-1", "class-2"]}
         crud.get_active_class_ids.assert_called_once_with("user-id-123")
+
+
+def test_set_enrollments_delegates_to_one_transactional_service(auth_client_admin):
+    with patch("app.routers.enrollments.crud_enrollment") as crud:
+        crud.set_user_enrollments.return_value = []
+
+        response = auth_client_admin.post(
+            "/admin/enrollments/set",
+            json={"user_id": "user-id-123", "class_ids": []},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+        crud.set_user_enrollments.assert_called_once_with(
+            "user-id-123", [], "admin-id-123"
+        )

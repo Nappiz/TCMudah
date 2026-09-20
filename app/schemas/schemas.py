@@ -171,7 +171,7 @@ class EnrollmentOut(BaseModel):
 
 class EnrollmentSetIn(BaseModel):
     user_id: str
-    class_ids: List[str]
+    class_ids: List[str] = Field(..., max_length=500)
 
 # --- Materials ---
 MaterialType = Literal["video", "ppt"]
@@ -206,12 +206,11 @@ Text1000 = Annotated[str, Field(min_length=4, max_length=1000)]
 Rating = Annotated[int, Field(ge=1, le=5)]
 
 class FeedbackIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     class_id: str
     text: str = Field(..., min_length=4, max_length=1000, alias="message")
     rating: int | None = Field(default=None, ge=1, le=5)
-
-    class Config:
-        populate_by_name = True
 
 class FeedbackOut(BaseModel):
     id: str
@@ -410,3 +409,21 @@ class DashboardOverviewOut(BaseModel):
     period: DashboardPeriodOut
     pending_latest: list[DashboardOrderPreviewOut]
     recent_orders: list[DashboardOrderPreviewOut]
+
+
+class PaginatedFeedbackOut(BaseModel):
+    total: int
+    data: list[AdminFeedbackOut]
+
+
+class PaginatedShortlinksOut(BaseModel):
+    total: int
+    data: list[ShortlinkOut]
+
+
+class CatalogOut(BaseModel):
+    active_batch_id: Optional[str] = None
+    mentors: list[MentorOut]
+    curriculum: list[CurriculumOut]
+    classes: list[ClassOut]
+    packages: list[PackageOut]

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.core.observability import ObservabilityMiddleware
 
 # Import routers
 from app.routers.auth import router as auth_router, router_me
@@ -18,6 +19,8 @@ from app.routers.feedback import router as feedback_router
 from app.routers.shortlinks import router as shortlinks_router
 from app.routers.notifications import router as notifications_router
 from app.routers.dashboard import router as dashboard_router
+from app.routers.observability import router as observability_router
+from app.routers.catalog import router as catalog_router
 
 settings = get_settings()
 
@@ -36,7 +39,16 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "X-Request-ID",
+        "X-DB-Queries",
+        "X-Instance-Cold",
+        "Server-Timing",
+        "ETag",
+    ],
 )
+# Added after CORS so instrumentation also observes preflight responses.
+app.add_middleware(ObservabilityMiddleware)
 
 # ---------------- HEALTH ----------------
 @app.get("/healthz")
@@ -65,6 +77,8 @@ app.include_router(feedback_router)
 app.include_router(shortlinks_router)
 app.include_router(notifications_router)
 app.include_router(dashboard_router)
+app.include_router(observability_router)
+app.include_router(catalog_router)
 
 from app.routers.batches import router as batches_router
 app.include_router(batches_router)

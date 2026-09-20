@@ -1,4 +1,5 @@
 from app.core.supabase_client import supabase
+from app.core.rpc import unwrap_rpc_object
 
 def get_feedback_by_user_and_class(user_id: str, class_id: str):
     sb = supabase()
@@ -61,20 +62,21 @@ def get_my_feedbacks(user_id: str):
     )
     return res.data or []
 
-def get_admin_feedbacks(class_id: str = ""):
-    sb = supabase()
-    q = sb.table("feedbacks").select("id, class_id, text, rating, created_at").order("created_at", desc=True)
-    if class_id:
-        q = q.eq("class_id", class_id)
-    res = q.execute()
-    return res.data or []
-
-def get_class_titles(cids: list[str]):
-    sb = supabase()
-    if not cids:
-        return {}
-    c = sb.table("classes").select("id,title").in_("id", cids).execute()
-    return {row["id"]: row.get("title", "") for row in (c.data or [])}
+def get_admin_feedbacks(
+    limit: int = 20,
+    offset: int = 0,
+    class_id: str | None = None,
+):
+    response = supabase().rpc(
+        "admin_paginated_feedbacks",
+        {
+            "p_limit": max(1, min(limit, 100)),
+            "p_offset": max(0, offset),
+            "p_class_id": class_id,
+        },
+    ).execute()
+    payload = unwrap_rpc_object(response.data, rpc_name="admin_paginated_feedbacks")
+    return int(payload.get("total") or 0), payload.get("data") or []
 
 def delete_feedback(fid: str):
     sb = supabase()

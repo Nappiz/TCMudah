@@ -19,6 +19,7 @@ from app.crud.crud_package import (
     create_package,
     update_package,
     delete_package,
+    PACKAGE_COLUMNS,
 )
 
 class TestCrudPackage:
@@ -52,7 +53,7 @@ class TestCrudPackage:
         
         mock_active_batch.assert_called_once()
         mock_supabase.table.assert_called_once_with("packages")
-        mock_table.select.assert_called_once_with("*")
+        mock_table.select.assert_called_once_with(PACKAGE_COLUMNS)
         mock_select.eq.assert_called_once_with("visible", True)
         mock_eq1.order.assert_called_once_with("created_at", desc=True)
         mock_order.eq.assert_called_once_with("batch_id", "b1")

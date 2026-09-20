@@ -22,7 +22,8 @@ from app.crud.crud_batch import (
     delete_batch,
     get_active_batch_id_cached,
     invalidate_active_batch_cache,
-    CACHE_TTL
+    CACHE_TTL,
+    BATCH_COLUMNS,
 )
 
 class TestCrudBatch:
@@ -56,7 +57,7 @@ class TestCrudBatch:
         
         # Behavioral Verification
         mock_supabase.table.assert_called_once_with("batches")
-        mock_table.select.assert_called_once_with("*")
+        mock_table.select.assert_called_once_with(BATCH_COLUMNS)
         mock_select.order.assert_called_once_with("created_at", desc=True)
         mock_order.execute.assert_called_once()
 
@@ -79,7 +80,7 @@ class TestCrudBatch:
         
         # Behavioral Verification
         mock_supabase.table.assert_called_once_with("batches")
-        mock_table.select.assert_called_once_with("*")
+        mock_table.select.assert_called_once_with(BATCH_COLUMNS)
         mock_select.eq.assert_called_once_with("is_active", True)
         mock_eq.order.assert_called_once_with("created_at", desc=True)
         mock_order.limit.assert_called_once_with(1)
@@ -182,7 +183,7 @@ class TestCrudBatch:
     def test_get_active_batch_id_cached_mechanism(self, mock_supabase, mocker):
         """Memastikan cache tidak melakukan query ke db jika belum expire."""
         # Mock time untuk mengontrol umur cache
-        mock_time = mocker.patch("app.crud.crud_batch.time.time")
+        mock_time = mocker.patch("app.crud.crud_batch.time.monotonic")
         mock_time.return_value = 1000.0
         
         mock_limit = mock_supabase.table().select().eq().order().limit()
@@ -204,3 +205,14 @@ class TestCrudBatch:
         bid3 = get_active_batch_id_cached()
         assert bid3 == "b1"
         assert mock_limit.execute.call_count == 2
+
+    def test_negative_active_batch_result_is_cached(self, mock_supabase, mocker):
+        mock_time = mocker.patch("app.crud.crud_batch.time.monotonic")
+        mock_time.return_value = 2000.0
+        mock_limit = mock_supabase.table().select().eq().order().limit()
+        mock_limit.execute.return_value.data = []
+
+        assert get_active_batch_id_cached() is None
+        mock_time.return_value = 2010.0
+        assert get_active_batch_id_cached() is None
+        assert mock_limit.execute.call_count == 1

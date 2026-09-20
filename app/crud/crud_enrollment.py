@@ -1,6 +1,9 @@
 from app.core.supabase_client import supabase
 from app.core.pagination import decode_cursor, encode_cursor
-from app.core.rpc import unwrap_rpc_object
+from app.core.rpc import unwrap_rpc_list, unwrap_rpc_object
+
+
+ENROLLMENT_COLUMNS = "id,user_id,class_id,active,assigned_by,created_at"
 
 
 def _with_opaque_cursor(payload: dict) -> dict:
@@ -65,59 +68,48 @@ def get_active_class_ids(user_id: str):
     )
     return [row["class_id"] for row in (response.data or [])]
 
-def get_package_class_ids(package_id: str):
-    sb = supabase()
-    pkg_res = sb.table("packages").select("class_ids").eq("id", package_id).limit(1).execute()
-    if not pkg_res.data:
-        return None
-    return pkg_res.data[0]["class_ids"]
 
-def get_existing_enrollments(user_id: str, class_ids: list[str]):
-    if not class_ids:
-        return set()
+def set_user_enrollments(user_id: str, class_ids: list[str], assigned_by: str):
     sb = supabase()
-    existing = sb.table("enrollments").select("class_id").eq("user_id", user_id).in_("class_id", class_ids).execute()
-    return {row["class_id"] for row in (existing.data or [])}
+    response = sb.rpc(
+        "admin_set_user_enrollments",
+        {
+            "p_user_id": user_id,
+            "p_class_ids": class_ids,
+            "p_assigned_by": assigned_by,
+        },
+    ).execute()
+    return unwrap_rpc_list(response.data, rpc_name="admin_set_user_enrollments")
 
-def insert_enrollments(to_insert_data: list[dict]):
-    if not to_insert_data:
-        return
-    sb = supabase()
-    sb.table("enrollments").insert(to_insert_data).execute()
 
-def update_enrollments_active(user_id: str, class_ids: list[str]):
-    if not class_ids:
-        return
+def set_package_enrollments(user_id: str, package_id: str, assigned_by: str):
     sb = supabase()
-    sb.table("enrollments").update({"active": True}).eq("user_id", user_id).in_("class_id", class_ids).execute()
+    response = sb.rpc(
+        "admin_set_package_enrollments",
+        {
+            "p_user_id": user_id,
+            "p_package_id": package_id,
+            "p_assigned_by": assigned_by,
+        },
+    ).execute()
+    return unwrap_rpc_list(response.data, rpc_name="admin_set_package_enrollments")
 
 def get_user_enrollments(user_id: str):
     sb = supabase()
-    final = sb.table("enrollments").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    final = sb.table("enrollments").select(ENROLLMENT_COLUMNS).eq("user_id", user_id).order("created_at", desc=True).execute()
     return final.data or []
 
 def get_active_user_enrollments(user_id: str):
     sb = supabase()
     res = (
         sb.table("enrollments")
-        .select("*")
+        .select(ENROLLMENT_COLUMNS)
         .eq("user_id", user_id)
         .eq("active", True)
         .order("created_at", desc=True)
         .execute()
     )
     return res.data or []
-
-def get_all_user_enrollments(user_id: str):
-    sb = supabase()
-    existing = sb.table("enrollments").select("id, class_id").eq("user_id", user_id).execute()
-    return {row["class_id"]: row for row in (existing.data or [])}
-
-def delete_enrollments(ids: list[str]):
-    if not ids:
-        return
-    sb = supabase()
-    sb.table("enrollments").delete().in_("id", ids).execute()
 
 def toggle_enrollment_active(eid: str, active: bool):
     sb = supabase()

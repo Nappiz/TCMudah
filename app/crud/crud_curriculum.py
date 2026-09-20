@@ -1,8 +1,11 @@
 from app.core.supabase_client import supabase
 
+
+CURRICULUM_COLUMNS = "id,code,name,sem,blurb,created_at"
+
 def get_all_curriculum(query: str = ""):
     sb = supabase()
-    q = sb.table("curriculum").select("*").order("sem", desc=False).order("code", desc=False)
+    q = sb.table("curriculum").select(CURRICULUM_COLUMNS).order("sem", desc=False).order("code", desc=False)
     if query:
         like = f"%{query}%"
         q = q.ilike("name", like)

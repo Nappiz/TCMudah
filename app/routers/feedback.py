@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from app.errors.exceptions import ForbiddenError, NotFoundError
 
-from app.schemas.schemas import FeedbackIn, FeedbackOut, AdminFeedbackOut
+from app.schemas.schemas import FeedbackIn, FeedbackOut, PaginatedFeedbackOut
 from app.core.deps import require_roles, get_current_user
 from app.crud import crud_feedback
 from app.crud import crud_material # to reuse check_user_enrollment
@@ -34,25 +34,20 @@ def my_feedbacks(user=Depends(get_current_user)):
 
 @router.get(
     "/admin/feedback",
-    response_model=list[AdminFeedbackOut],
+    response_model=PaginatedFeedbackOut,
     dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))]
 )
-def list_feedback_admin(class_id: str = Query("", description="Optional filter: class_id atau kosong untuk semua")):
-    fb = crud_feedback.get_admin_feedbacks(class_id)
-    cids = list({row["class_id"] for row in fb if row.get("class_id")})
-    title_map = crud_feedback.get_class_titles(cids)
-
-    out = []
-    for row in fb:
-        out.append({
-            "id": row["id"],
-            "class_id": row["class_id"],
-            "text": row["text"],
-            "rating": row.get("rating"),
-            "created_at": row.get("created_at"),
-            "class_title": title_map.get(row["class_id"]),
-        })
-    return out
+def list_feedback_admin(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    class_id: str | None = Query(None),
+):
+    total, data = crud_feedback.get_admin_feedbacks(
+        limit=limit,
+        offset=(page - 1) * limit,
+        class_id=class_id,
+    )
+    return {"total": total, "data": data}
 
 @router.delete(
     "/admin/feedback/{fid}",

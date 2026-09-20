@@ -10,7 +10,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 @router.get("/{key}", response_model=schemas.AppSettingOut)
 def get_setting(key: str):
     sb = supabase()
-    res = sb.table("app_settings").select("*").eq("key", key).limit(1).execute()
+    res = sb.table("app_settings").select("key,value").eq("key", key).limit(1).execute()
     
     if not res.data:
         return schemas.AppSettingOut(key=key, value="false")
