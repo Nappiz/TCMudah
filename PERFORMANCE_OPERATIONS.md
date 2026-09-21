@@ -1,16 +1,17 @@
 # Performance Operations Runbook
 
-Dokumen ini adalah kontrak operasional PERF-06 sampai PERF-10. Perubahan aplikasi
+Dokumen ini adalah kontrak operasional PERF-06 sampai PERF-15. Perubahan aplikasi
 bergantung pada migration `202609200001_perf_01_05.sql` lalu
-`202609200002_perf_06_10.sql`; jangan membalik urutannya.
+`202609200002_perf_06_10.sql`, lalu `202609200003_perf_11_15.sql`; jangan membalik
+urutannya.
 
 ## Rollout database
 
 1. Ambil backup database dan lakukan rollout lebih dulu di staging.
-2. Jadwalkan migration kedua pada periode write rendah. Migration memakai
+2. Jadwalkan migration kedua dan ketiga pada periode write rendah. Migration memakai
    `lock_timeout=10s` agar gagal cepat alih-alih menahan traffic bila tabel sedang sibuk.
-3. Terapkan kedua migration melalui Supabase CLI/workflow migration. Jika migration
-   pertama sudah pernah diterapkan, hanya jalankan migration kedua.
+3. Terapkan migration melalui Supabase CLI/workflow migration. Jika dua migration
+   pertama sudah diterapkan, hanya jalankan migration ketiga.
 4. Jalankan verifikasi berikut sebelum deploy backend:
 
 ```sql
@@ -27,6 +28,10 @@ select
   (select count(distinct order_id) from public.order_items) as normalized_orders,
   (select count(*) from public.order_items) as normalized_items;
 
+select id, public
+from storage.buckets
+where id = '<PAYMENTS_BUCKET>';
+
 select routine_name
 from information_schema.routines
 where routine_schema = 'public'
@@ -38,28 +43,110 @@ where routine_schema = 'public'
     'admin_update_order_status',
     'admin_paginated_feedbacks',
     'admin_paginated_shortlinks',
-    'get_public_catalog'
+    'get_public_catalog',
+    'get_authorized_materials',
+    'submit_feedback',
+    'admin_create_batch',
+    'admin_update_batch',
+    'resolve_shortlink',
+    'create_payment_upload_intent'
   )
 order by routine_name;
 ```
 
 `duplicate_enrollments` harus nol. `normalized_orders` boleh lebih kecil dari `orders`
 hanya jika order lama memang mempunyai `items=[]`. Migration berjalan dalam satu
-transaksi: bila satu statement gagal, seluruh migration kedua di-rollback.
+transaksi: bila satu statement gagal, migration terkait di-rollback seluruhnya.
+
+Migration ketiga juga berhenti tanpa perubahan parsial jika menemukan email, slug,
+setting key, atau proof path duplikat. Selesaikan konflik tersebut berdasarkan data
+bisnis; jangan menghapus row secara acak lalu mengulang migration.
+
+## Verifikasi index dan query plan
+
+Setelah migration ketiga, jalankan `ANALYZE` pada tabel yang banyak berubah dan cek
+query kritis dengan data representatif:
+
+```sql
+analyze public.orders;
+analyze public.enrollments;
+analyze public.feedbacks;
+analyze public.shortlinks;
+
+explain (analyze, buffers)
+select id from public.orders
+where status = 'approved' and user_id = '<USER_UUID>'::uuid
+order by created_at desc limit 20;
+
+explain (analyze, buffers)
+select id, title from public.class_materials
+where class_id = '<CLASS_UUID>'::uuid and visible = true
+order by created_at desc;
+```
+
+Bandingkan estimated row dengan actual row dan pastikan index yang dipilih sesuai
+volume produksi. Jangan memaksa index hint atau menambah index duplikat.
 
 ## Deployment dan smoke test
 
-Deploy backend sebelum frontend. Uji minimal:
+Deploy migration lebih dulu, kemudian backend dan frontend dari release yang sama.
+Uji minimal:
 
 - save/clear enrollment dan assign package;
 - create order valid, penolakan item tersembunyi, list order, update status;
 - pagination/search order, feedback, shortlink, dan users;
 - `GET /catalog`, request ulang dengan `If-None-Match`, serta response `304`;
 - CMS overview, terutama revenue split dan top classes.
+- direct upload bukti JPEG/PNG/WebP, penolakan file terlalu besar, create order,
+  dan pembukaan bukti melalui signed read URL oleh admin;
+- material peserta tanpa enrollment harus `403`; feedback dan shortlink click tidak
+  menghasilkan duplicate/lost update ketika request concurrent.
 
 Jangan hapus kolom JSON `orders.items`: kolom itu dipertahankan sebagai snapshot
 kompatibilitas response. `order_items` adalah bentuk relasional untuk query list dan
 analytics; order baru menulis keduanya dalam transaksi yang sama.
+
+## Same-origin API dan concurrency
+
+Browser selalu memanggil `/api`; Next.js meneruskannya ke `BACKEND_URL`. Jangan
+menambahkan kembali `NEXT_PUBLIC_API_BASE`, karena itu mengembalikan browser ke
+cross-domain CORS/preflight. `BACKEND_URL` harus server-only.
+
+Runtime otomatis membatasi `SYNC_WORKER_LIMIT` agar tidak melebihi
+`SUPABASE_MAX_CONNECTIONS`. Mulai dari nilai 20/20, lalu sesuaikan berdasarkan p95,
+pool timeout, CPU, dan memory. Timeout default 15 detik dimaksudkan untuk gagal
+terbatas, bukan menutupi query lambat.
+
+## Private payment uploads
+
+Bucket pada `PAYMENTS_BUCKET` wajib private. Upload intent berlaku 10 menit, terikat
+pada user/path/MIME/size, hanya dapat dikonsumsi oleh create-order transaksional, dan
+proof read admin berlaku 5 menit. Izinkan origin frontend pada konfigurasi CORS Storage.
+
+Jadwalkan pembersihan harian untuk upload yang ditinggalkan sebelum checkout:
+
+```text
+python -m scripts.cleanup_expired_payment_uploads
+```
+
+Job hanya menghapus object dengan intent kedaluwarsa dan `consumed_at IS NULL`; object
+yang sudah terhubung ke order tidak disentuh.
+
+## Verifikasi lokal release PERF-11–15
+
+Hasil terakhir pada 21 September 2026:
+
+- `pytest -q`: 140 passed tanpa warning;
+- `python -m compileall -q app scripts tests`: lulus;
+- `python -m pip check`: tidak ada dependency rusak;
+- `tsc --noEmit`: lulus;
+- Biome check untuk seluruh file frontend yang diubah: lulus;
+- `next build --turbopack`: lulus. Pesan dynamic-server saat prerender halaman utama
+  di lingkungan lokal tanpa backend aktif adalah fallback server component yang
+  diharapkan, bukan build failure.
+
+Hasil ini tidak menggantikan smoke test staging, pemeriksaan preflight data migration,
+atau `EXPLAIN (ANALYZE, BUFFERS)` pada volume data produksi.
 
 ## Observability
 

@@ -1,3 +1,4 @@
+from app.core.rpc import unwrap_rpc_list
 from app.core.supabase_client import supabase
 
 
@@ -34,27 +35,13 @@ def delete_material(mid: str):
     delres = sb.table("class_materials").delete().eq("id", mid).execute()
     return delres.data if delres.data else None
 
-def get_user_materials(class_id: str):
-    sb = supabase()
-    q = (
-        sb.table("class_materials")
-        .select(MATERIAL_COLUMNS)
-        .eq("class_id", class_id)
-        .eq("visible", True)
-        .order("created_at", desc=True)
-    )
-    res = q.execute()
-    return res.data or []
-
-def check_user_enrollment(user_id: str, class_id: str):
-    sb = supabase()
-    enr = (
-        sb.table("enrollments")
-        .select("id")
-        .eq("user_id", user_id)
-        .eq("class_id", class_id)
-        .eq("active", True)
-        .limit(1)
-        .execute()
-    )
-    return bool(enr.data)
+def get_authorized_materials(user_id: str, class_id: str, is_staff: bool):
+    response = supabase().rpc(
+        "get_authorized_materials",
+        {
+            "p_user_id": user_id,
+            "p_class_id": class_id,
+            "p_is_staff": is_staff,
+        },
+    ).execute()
+    return unwrap_rpc_list(response.data, rpc_name="get_authorized_materials")

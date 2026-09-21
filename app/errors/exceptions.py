@@ -7,6 +7,14 @@ class BadRequestError(AppException):
     def __init__(self, detail: str = "Bad Request"):
         super().__init__(status_code=400, detail=detail)
 
+class ConflictError(AppException):
+    def __init__(self, detail: str = "Conflict"):
+        super().__init__(status_code=409, detail=detail)
+
+class ServiceUnavailableError(AppException):
+    def __init__(self, detail: str = "Service Unavailable"):
+        super().__init__(status_code=503, detail=detail)
+
 class UnauthorizedError(AppException):
     def __init__(self, detail: str = "Unauthorized"):
         super().__init__(status_code=401, detail=detail)

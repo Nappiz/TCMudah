@@ -24,10 +24,12 @@ def create_batch(payload: BatchIn):
 
 @router.patch("/admin/batches/{bid}", response_model=BatchOut, dependencies=[Depends(require_roles("superadmin", "admin"))])
 def update_batch(bid: str, payload: BatchUpdate):
-    data = payload.model_dump(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True, exclude_none=True)
     if not data:
-        batch = crud_batch.get_all_batches() # just a fallback
-        return next((b for b in batch if b["id"] == bid), None)
+        batch = crud_batch.get_batch_by_id(bid)
+        if not batch:
+            raise NotFoundError(detail="Batch tidak ditemukan")
+        return batch
     up = crud_batch.update_batch(bid, data)
     if not up:
         raise NotFoundError(detail="Batch tidak ditemukan")

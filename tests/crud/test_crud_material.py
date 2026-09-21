@@ -4,7 +4,7 @@ Unit tests for app.crud.crud_material.
 Target: app.crud.crud_material
 
 Skenario:
-1. Happy path: Mendapatkan materials untuk admin dan user, mengecek enrollment, membuat, update, delete material.
+1. Happy path: Mendapatkan materials admin dan authorized user, membuat, update, delete material.
 2. Behavioral Verification: Menganalisa parameter pemanggilan CRUD dengan assert_called_once_with.
 """
 
@@ -17,8 +17,7 @@ from app.crud.crud_material import (
     get_material_by_id,
     update_material,
     delete_material,
-    get_user_materials,
-    check_user_enrollment,
+    get_authorized_materials,
     MATERIAL_COLUMNS,
 )
 
@@ -44,51 +43,19 @@ class TestCrudMaterial:
         mock_select.eq.assert_called_once_with("class_id", "c1")
         mock_eq.order.assert_called_once_with("created_at", desc=True)
 
-    def test_get_user_materials(self, mock_supabase):
-        mock_table = mock_supabase.table.return_value
-        mock_select = mock_table.select.return_value
-        mock_eq1 = mock_select.eq.return_value
-        mock_eq2 = mock_eq1.eq.return_value
-        mock_order = mock_eq2.order.return_value
-        
-        mock_order.execute.return_value.data = [{"id": "m1"}]
-        
-        res = get_user_materials("c1")
-        
-        assert len(res) == 1
-        mock_supabase.table.assert_called_once_with("class_materials")
-        mock_table.select.assert_called_once_with(MATERIAL_COLUMNS)
-        mock_select.eq.assert_called_once_with("class_id", "c1")
-        mock_eq1.eq.assert_called_once_with("visible", True)
-        mock_eq2.order.assert_called_once_with("created_at", desc=True)
+    def test_get_authorized_materials_uses_one_rpc(self, mock_supabase):
+        mock_supabase.rpc.return_value.execute.return_value = MagicMock(
+            data=[{"id": "m1"}]
+        )
 
-    @pytest.mark.parametrize(
-        "mock_db_return, expected_result",
-        [
-            ([{"id": "enr1"}], True),
-            ([], False)
-        ],
-        ids=["enrolled", "not_enrolled"]
-    )
-    def test_check_user_enrollment(self, mock_supabase, mock_db_return, expected_result):
-        mock_table = mock_supabase.table.return_value
-        mock_select = mock_table.select.return_value
-        mock_eq1 = mock_select.eq.return_value
-        mock_eq2 = mock_eq1.eq.return_value
-        mock_eq3 = mock_eq2.eq.return_value
-        mock_limit = mock_eq3.limit.return_value
-        
-        mock_limit.execute.return_value.data = mock_db_return
-        
-        res = check_user_enrollment("user1", "c1")
-        
-        assert res is expected_result
-        mock_supabase.table.assert_called_once_with("enrollments")
-        mock_table.select.assert_called_once_with("id")
-        mock_select.eq.assert_called_once_with("user_id", "user1")
-        mock_eq1.eq.assert_called_once_with("class_id", "c1")
-        mock_eq2.eq.assert_called_once_with("active", True)
-        mock_eq3.limit.assert_called_once_with(1)
+        res = get_authorized_materials("user1", "c1", False)
+
+        assert len(res) == 1
+        mock_supabase.rpc.assert_called_once_with(
+            "get_authorized_materials",
+            {"p_user_id": "user1", "p_class_id": "c1", "p_is_staff": False},
+        )
+        mock_supabase.table.assert_not_called()
 
     # ═══════════════════════════════════════════
     # Mutations (Create, Update, Delete)

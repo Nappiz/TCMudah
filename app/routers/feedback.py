@@ -3,8 +3,8 @@ from app.errors.exceptions import ForbiddenError, NotFoundError
 
 from app.schemas.schemas import FeedbackIn, FeedbackOut, PaginatedFeedbackOut
 from app.core.deps import require_roles, get_current_user
+from app.core.rpc import public_rpc_error
 from app.crud import crud_feedback
-from app.crud import crud_material # to reuse check_user_enrollment
 
 router = APIRouter(tags=["feedback"])
 
@@ -13,12 +13,19 @@ def create_or_update_feedback(payload: FeedbackIn, user=Depends(get_current_user
     role = (user or {}).get("role", "peserta")
     is_staff = role in ("mentor", "admin", "superadmin")
 
-    if not is_staff:
-        has_access = crud_material.check_user_enrollment(user["id"], payload.class_id)
-        if not has_access:
-            raise ForbiddenError(detail="Tidak punya akses ke kelas ini")
-
-    row = crud_feedback.upsert_feedback(user["id"], payload.class_id, payload.text, payload.rating)
+    try:
+        row = crud_feedback.submit_feedback(
+            user["id"],
+            payload.class_id,
+            is_staff,
+            payload.text,
+            payload.rating,
+        )
+    except Exception as exc:
+        message = public_rpc_error(exc, ("Tidak punya akses ke kelas ini",))
+        if message:
+            raise ForbiddenError(detail=message) from exc
+        raise
 
     return {
         "id": row["id"],

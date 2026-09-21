@@ -120,3 +120,13 @@ class TestMaterialsRouter:
         response = auth_client_admin.delete("/admin/materials/m1")
         assert response.status_code == 404
         mock_crud.delete_material.assert_called_once_with("m1")
+
+    def test_user_materials_combines_access_check_and_data(self, auth_client_user, mock_crud):
+        mock_crud.get_authorized_materials.return_value = []
+
+        response = auth_client_user.get("/materials?class_id=c1")
+
+        assert response.status_code == 200
+        mock_crud.get_authorized_materials.assert_called_once_with(
+            "user-id-123", "c1", False
+        )

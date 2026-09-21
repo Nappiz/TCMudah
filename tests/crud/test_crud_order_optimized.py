@@ -22,13 +22,25 @@ def test_create_order_uses_single_transactional_rpc(mock_supabase):
     result = create_order_transactional(
         "user-1",
         [{"item_id": "class-1", "item_type": "class", "qty": 1}],
-        None,
+        "user-1/proof.jpg",
         "User",
         None,
     )
 
     assert result["id"] == "order-1"
-    mock_supabase.rpc.assert_called_once()
+    mock_supabase.rpc.assert_called_once_with(
+        "create_order_transactional",
+        {
+            "p_user_id": "user-1",
+            "p_items": [
+                {"item_id": "class-1", "item_type": "class", "qty": 1}
+            ],
+            "p_proof_path": "user-1/proof.jpg",
+            "p_proof_bucket": "payments",
+            "p_sender_name": "User",
+            "p_note": None,
+        },
+    )
     mock_supabase.table.assert_not_called()
 
 

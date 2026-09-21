@@ -16,14 +16,6 @@ def get_admin_shortlinks(limit: int = 20, offset: int = 0, search: str = ""):
     payload = unwrap_rpc_object(response.data, rpc_name="admin_paginated_shortlinks")
     return int(payload.get("total") or 0), payload.get("data") or []
 
-def check_slug_exists(slug: str, exclude_id: str = None):
-    sb = supabase()
-    q = sb.table("shortlinks").select("id").ilike("slug", slug)
-    if exclude_id:
-        q = q.neq("id", exclude_id)
-    exists = q.limit(1).execute()
-    return bool(exists.data)
-
 def create_shortlink(data: dict):
     sb = supabase()
     ins = sb.table("shortlinks").insert(data).execute()
@@ -45,22 +37,7 @@ def delete_shortlink(sid: str):
     return delres.data if delres.data else None
 
 def resolve_shortlink(slug: str):
-    sb = supabase()
-    res = (
-        sb.table("shortlinks")
-        .select("id, url, clicks, active")
-        .ilike("slug", slug)
-        .eq("active", True)
-        .limit(1)
-        .execute()
-    )
-    if not res.data:
+    response = supabase().rpc("resolve_shortlink", {"p_slug": slug}).execute()
+    if response.data is None:
         return None
-    return res.data[0]
-
-def increment_shortlink_clicks(sid: str, current_clicks: int):
-    sb = supabase()
-    try:
-        sb.table("shortlinks").update({"clicks": current_clicks + 1}).eq("id", sid).execute()
-    except Exception:
-        pass
+    return unwrap_rpc_object(response.data, rpc_name="resolve_shortlink")

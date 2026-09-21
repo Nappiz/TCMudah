@@ -1,4 +1,5 @@
 from app.core.supabase_client import supabase
+from app.core.rpc import unwrap_rpc_object
 import time
 import threading
 
@@ -40,27 +41,33 @@ def get_active_batch():
     res = sb.table("batches").select(BATCH_COLUMNS).eq("is_active", True).order("created_at", desc=True).limit(1).execute()
     return res.data[0] if res.data else None
 
+def get_batch_by_id(batch_id: str):
+    res = (
+        supabase()
+        .table("batches")
+        .select(BATCH_COLUMNS)
+        .eq("id", batch_id)
+        .limit(1)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
 def create_batch(data: dict):
-    sb = supabase()
-    
-    # If this batch is active, deactivate others
-    if data.get("is_active"):
-        sb.table("batches").update({"is_active": False}).neq("id", "00000000-0000-0000-0000-000000000000").execute()
-        
-    ins = sb.table("batches").insert(data).execute()
+    response = supabase().rpc(
+        "admin_create_batch",
+        {"p_name": data["name"], "p_is_active": bool(data.get("is_active"))},
+    ).execute()
     invalidate_active_batch_cache()
-    return ins.data[0] if ins.data else None
+    return unwrap_rpc_object(response.data, rpc_name="admin_create_batch")
 
 def update_batch(bid: str, data: dict):
-    sb = supabase()
-    
-    # If this batch is being set to active, deactivate others
-    if data.get("is_active"):
-        sb.table("batches").update({"is_active": False}).neq("id", bid).execute()
-        
-    up = sb.table("batches").update(data).eq("id", bid).execute()
+    response = supabase().rpc(
+        "admin_update_batch", {"p_batch_id": bid, "p_patch": data}
+    ).execute()
     invalidate_active_batch_cache()
-    return up.data[0] if up.data else None
+    if response.data is None:
+        return None
+    return unwrap_rpc_object(response.data, rpc_name="admin_update_batch")
 
 def delete_batch(bid: str):
     sb = supabase()

@@ -138,10 +138,20 @@ class OrderItemIn(BaseModel):
     qty: int = Field(..., ge=1, le=99)
 
 class OrderCreateIn(BaseModel):
-    items: List[OrderItemIn]
-    proof_url: Optional[str] = None
+    items: List[OrderItemIn] = Field(..., min_length=1, max_length=100)
+    proof_path: str = Field(..., min_length=3, max_length=512)
     sender_name: Optional[str] = None
     note: Optional[str] = None
+
+class PaymentUploadIntentIn(BaseModel):
+    content_type: Literal["image/jpeg", "image/png", "image/webp"]
+    size_bytes: int = Field(..., ge=1, le=5_242_880)
+
+class PaymentUploadIntentOut(BaseModel):
+    signed_url: str
+    path: str
+    expires_at: str
+    max_size_bytes: int
 
 OrderStatus = Literal["pending", "approved", "rejected", "expired"]
 
@@ -225,7 +235,7 @@ class AdminFeedbackOut(FeedbackOut):
 # --- Shortlinks ---
 
 class ShortlinkBase(BaseModel):
-    slug: str = Field(..., min_length=1, max_length=64)
+    slug: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     url: str
     title: str | None = None
     description: str | None = None
@@ -238,7 +248,9 @@ class ShortlinkIn(ShortlinkBase):
 
 
 class ShortlinkUpdate(BaseModel):
-    slug: str | None = Field(None, min_length=1, max_length=64)
+    slug: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$"
+    )
     url: str | None = None
     title: str | None = None
     description: str | None = None

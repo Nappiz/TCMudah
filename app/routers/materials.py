@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from app.errors.exceptions import ForbiddenError, NotFoundError
+from app.core.rpc import public_rpc_error
 
 from app.schemas.schemas import MaterialIn, MaterialOut, MaterialUpdate
 from app.core.deps import require_roles, get_current_user
@@ -44,10 +45,12 @@ def delete_material_admin(mid: str):
 def list_materials_user(class_id: str = Query(...), user=Depends(get_current_user)):
     role = (user or {}).get("role", "peserta")
     is_staff = role in ("mentor", "admin", "superadmin")
-
-    if not is_staff:
-        has_access = crud_material.check_user_enrollment(user["id"], class_id)
-        if not has_access:
-            raise ForbiddenError(detail="Tidak punya akses ke kelas ini")
-
-    return crud_material.get_user_materials(class_id)
+    try:
+        return crud_material.get_authorized_materials(
+            user["id"], class_id, is_staff
+        )
+    except Exception as exc:
+        message = public_rpc_error(exc, ("Tidak punya akses ke kelas ini",))
+        if message:
+            raise ForbiddenError(detail=message) from exc
+        raise

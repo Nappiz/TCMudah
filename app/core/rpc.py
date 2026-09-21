@@ -26,3 +26,10 @@ def public_rpc_error(exc: Exception, allowed_messages: tuple[str, ...]) -> str |
     """Return only an allow-listed business error; never leak database details."""
     raw = str(getattr(exc, "message", "") or exc)
     return next((message for message in allowed_messages if message in raw), None)
+
+
+def is_unique_violation(exc: Exception) -> bool:
+    code = getattr(exc, "code", None)
+    if code is None and exc.args and isinstance(exc.args[0], dict):
+        code = exc.args[0].get("code")
+    return str(code) == "23505"

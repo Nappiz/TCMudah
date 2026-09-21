@@ -1,8 +1,12 @@
+from contextlib import asynccontextmanager
+
+from anyio import to_thread
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.observability import ObservabilityMiddleware
+from app.core.supabase_client import close_supabase_client
 
 # Import routers
 from app.routers.auth import router as auth_router, router_me
@@ -24,7 +28,21 @@ from app.routers.catalog import router as catalog_router
 
 settings = get_settings()
 
-app = FastAPI(title="TC Mudah API")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    limiter = to_thread.current_default_thread_limiter()
+    limiter.total_tokens = max(
+        1,
+        min(settings.SYNC_WORKER_LIMIT, settings.SUPABASE_MAX_CONNECTIONS),
+    )
+    try:
+        yield
+    finally:
+        close_supabase_client()
+
+
+app = FastAPI(title="TC Mudah API", lifespan=lifespan)
 
 # ---------------- CORS ----------------
 frontend_origin = (settings.APP_ORIGIN or "http://localhost:3000").rstrip("/")

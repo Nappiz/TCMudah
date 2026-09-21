@@ -4,11 +4,12 @@ Tanggal audit: 20 September 2026
 Scope: `tcmudahbe` dan pola pemanggilan API di `TCMudahFE`  
 Jenis audit: static code audit; belum memakai production trace, query plan, atau schema/index aktual dari Supabase
 
-## Status implementasi PERF-01 sampai PERF-10
+## Status implementasi PERF-01 sampai PERF-15
 
-Status per 20 September 2026: **selesai di source code dan migration**. Migration
+Status per 21 September 2026: **selesai di source code dan migration**. Migration
 [`202609200001_perf_01_05.sql`](./supabase/migrations/202609200001_perf_01_05.sql) dan
-[`202609200002_perf_06_10.sql`](./supabase/migrations/202609200002_perf_06_10.sql)
+[`202609200002_perf_06_10.sql`](./supabase/migrations/202609200002_perf_06_10.sql), lalu
+[`202609200003_perf_11_15.sql`](./supabase/migrations/202609200003_perf_11_15.sql)
 harus diterapkan berurutan ke database Supabase sebelum backend/frontend baru dipasang.
 Bagian-bagian audit setelah tabel ini tetap dipertahankan sebagai catatan kondisi awal
 dan alasan desain.
@@ -25,13 +26,23 @@ dan alasan desain.
 | PERF-08 | Selesai | Save enrollment user dan package masing-masing memakai satu RPC transaksional. Input divalidasi di API dan database; duplikat legacy dikonsolidasikan sebelum unique index `(user_id, class_id)` dipasang. |
 | PERF-09 | Selesai | Order list/count/title memakai satu RPC; create dan status update memakai RPC atomik; item tak terlihat ditolak; title/price disnapshot; `order_items` menjadi sumber analytics tanpa ekspansi JSON saat request. |
 | PERF-10 | Selesai | Public catalog memakai satu `GET /catalog` → satu RPC, membaca active batch sekali, projection eksplisit, ETag, conditional 304, serta cache browser/CDN dengan stale-while-revalidate dan surrogate key. Semua consumer katalog utama memakai endpoint gabungan. |
+| PERF-11 | Selesai | Browser memakai same-origin `/api` melalui Next.js rewrite. GET/HEAD tidak lagi diberi `Content-Type: application/json`, sehingga preflight cross-origin rutin dihilangkan. Server component tetap memakai `BACKEND_URL` secara internal. |
+| PERF-12 | Selesai | Migration resmi menambah indeks workload aktual dan unique constraint untuk email, feedback, shortlink, active batch, settings, enrollment, serta proof path. Migration melakukan preflight data, deduplikasi yang aman, dan fail-fast untuk konflik yang perlu keputusan bisnis. |
+| PERF-13 | Selesai | Jalur sync dipertahankan secara sengaja, tetapi sekarang memiliki singleton HTTP pool, keep-alive, timeout, worker limit yang selaras dengan pool, shutdown cleanup, serta dependency yang dipin. Tidak ada `async def` semu yang menjalankan I/O sync di event loop. |
+| PERF-14 | Selesai | File bukti tidak lagi melewati memory/backend. Backend menerbitkan upload intent scoped, storage menerima upload langsung, create order memverifikasi intent+object secara transaksional, bucket wajib private, dan admin memakai signed read URL singkat. |
+| PERF-15 | Selesai | Material access, submit feedback, batch activation, dan shortlink resolve memakai RPC atomik; settings memakai upsert; register/shortlink mengandalkan unique constraint tanpa check-then-write; dua setting publik dibaca dalam satu query. |
 
 Coverage regresi ditambahkan pada CRUD, middleware, dan router baru. Prosedur rollout,
 observability, baseline, serta rollback dijelaskan di
 [`PERFORMANCE_OPERATIONS.md`](./PERFORMANCE_OPERATIONS.md).
-Verifikasi lokal terakhir: 127 test backend lulus, seluruh modul Python berhasil
-dikompilasi, TypeScript type-check dan Biome check lulus, serta Next.js production
-build selesai tanpa error.
+Angka verifikasi lokal diperbarui setelah setiap rangkaian implementasi dan tercatat
+pada runbook deployment.
+
+Verifikasi lokal terakhir: **140 test backend lulus**, Python compile check dan
+dependency check lulus, TypeScript type-check lulus, Biome check pada seluruh file
+frontend yang disentuh lulus, dan production build Next.js lulus. Migration tetap
+harus diterapkan serta divalidasi pada staging/production Supabase karena audit lokal
+tidak terhubung ke schema dan statistik data produksi.
 
 ## Ringkasan eksekutif
 

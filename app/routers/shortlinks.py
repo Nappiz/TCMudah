@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, Query
-from app.errors.exceptions import BadRequestError, NotFoundError
+from app.errors.exceptions import ConflictError, NotFoundError
 
 from app.schemas.schemas import PaginatedShortlinksOut, ShortlinkIn, ShortlinkOut, ShortlinkUpdate, ShortlinkResolveOut
 from app.core.deps import require_roles, get_current_user
+from app.core.rpc import is_unique_violation
 from app.crud import crud_shortlink
 
 router = APIRouter(tags=["shortlinks"])
@@ -29,13 +30,15 @@ def list_shortlinks_admin(
     dependencies=[Depends(require_roles("admin", "superadmin"))],
 )
 def create_shortlink(data: ShortlinkIn, current=Depends(get_current_user)):
-    if crud_shortlink.check_slug_exists(data.slug):
-        raise BadRequestError(detail="Slug sudah dipakai")
-
     payload = data.model_dump()
+    payload["slug"] = data.slug.strip().lower()
     payload["created_by"] = current["id"]
-
-    return crud_shortlink.create_shortlink(payload)
+    try:
+        return crud_shortlink.create_shortlink(payload)
+    except Exception as exc:
+        if is_unique_violation(exc):
+            raise ConflictError(detail="Slug sudah dipakai") from exc
+        raise
 
 @router.patch(
     "/admin/shortlinks/{sid}",
@@ -45,10 +48,8 @@ def create_shortlink(data: ShortlinkIn, current=Depends(get_current_user)):
 def update_shortlink(sid: str, data: ShortlinkUpdate):
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
 
-    new_slug = payload.get("slug")
-    if new_slug:
-        if crud_shortlink.check_slug_exists(new_slug, exclude_id=sid):
-            raise BadRequestError(detail="Slug sudah dipakai")
+    if payload.get("slug"):
+        payload["slug"] = payload["slug"].strip().lower()
 
     if not payload:
         res = crud_shortlink.get_shortlink_by_id(sid)
@@ -56,7 +57,12 @@ def update_shortlink(sid: str, data: ShortlinkUpdate):
             raise NotFoundError(detail="Shortlink tidak ditemukan")
         return res
 
-    up = crud_shortlink.update_shortlink(sid, payload)
+    try:
+        up = crud_shortlink.update_shortlink(sid, payload)
+    except Exception as exc:
+        if is_unique_violation(exc):
+            raise ConflictError(detail="Slug sudah dipakai") from exc
+        raise
     if not up:
         raise NotFoundError(detail="Shortlink tidak ditemukan")
     return up
@@ -77,10 +83,4 @@ def resolve_shortlink(slug: str):
     if not row:
         raise NotFoundError(detail="Shortlink tidak ditemukan")
 
-    try:
-        current_clicks = int(row.get("clicks") or 0)
-    except Exception:
-        current_clicks = 0
-
-    crud_shortlink.increment_shortlink_clicks(row["id"], current_clicks)
     return {"url": row["url"]}

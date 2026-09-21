@@ -7,6 +7,7 @@ async def app_exception_handler(request: Request, exc: AppException):
         status_code=exc.status_code,
         content={
             "success": False,
+            "detail": exc.detail,
             "error": {
                 "message": exc.detail
             }

@@ -1,8 +1,20 @@
-from fastapi import APIRouter, Depends, Query, UploadFile, File
-from app.errors.exceptions import BadRequestError, NotFoundError
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import RedirectResponse
+from app.errors.exceptions import (
+    BadRequestError,
+    NotFoundError,
+    ServiceUnavailableError,
+)
 from app.core.rpc import public_rpc_error
 
-from app.schemas.schemas import CheckoutInfoOut, OrderCreateIn, OrderOut, AdminOrderOut
+from app.schemas.schemas import (
+    AdminOrderOut,
+    CheckoutInfoOut,
+    OrderCreateIn,
+    OrderOut,
+    PaymentUploadIntentIn,
+    PaymentUploadIntentOut,
+)
 from pydantic import BaseModel
 from typing import Literal
 from app.core.deps import get_current_user, require_roles
@@ -21,11 +33,28 @@ def checkout_info():
         "group_link": settings.GROUP_LINK,
     }
 
-@router.post("/orders/upload")
-def upload_payment_proof(file: UploadFile = File(...), user=Depends(get_current_user)):
-    data = file.file.read()
-    pub = crud_order.upload_payment_proof(user["id"], file.filename, data, file.content_type or "image/jpeg")
-    return {"url": pub}
+@router.post(
+    "/orders/upload-intent",
+    response_model=PaymentUploadIntentOut,
+    status_code=201,
+)
+def create_payment_upload_intent(
+    payload: PaymentUploadIntentIn,
+    user=Depends(get_current_user),
+):
+    if payload.size_bytes > settings.PAYMENT_UPLOAD_MAX_BYTES:
+        raise BadRequestError(detail="Ukuran bukti pembayaran terlalu besar")
+    try:
+        return crud_order.create_payment_upload_intent(
+            user["id"], payload.content_type, payload.size_bytes
+        )
+    except Exception as exc:
+        message = public_rpc_error(
+            exc, ("Bucket bukti pembayaran harus private",)
+        )
+        if message:
+            raise ServiceUnavailableError(detail=message) from exc
+        raise
 
 @router.post("/orders", response_model=OrderOut, status_code=201, dependencies=[Depends(get_current_user)])
 def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
@@ -33,7 +62,7 @@ def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
         row = crud_order.create_order_transactional(
             user["id"],
             [item.model_dump() for item in payload.items],
-            payload.proof_url,
+            payload.proof_path,
             payload.sender_name or user["full_name"],
             payload.note,
         )
@@ -46,6 +75,9 @@ def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
                 "Format item order tidak valid",
                 "Item order tidak valid",
                 "Item tidak tersedia",
+                "Bukti pembayaran tidak valid atau kedaluwarsa",
+                "Bukti pembayaran belum diunggah",
+                "Bukti pembayaran tidak sesuai intent",
             ),
         )
         if message:
@@ -84,6 +116,26 @@ def list_orders_admin(
     total, orders = crud_order.get_paginated_orders(limit=limit, offset=offset, search=search, status=status)
 
     return {"total": total, "data": orders}
+
+@router.get(
+    "/admin/orders/{oid}/proof",
+    dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))],
+)
+def view_payment_proof(oid: str):
+    proof_path = crud_order.get_order_proof_path(oid)
+    if not proof_path:
+        raise NotFoundError(detail="Bukti pembayaran tidak ditemukan")
+    signed_url = crud_order.create_payment_proof_read_url(proof_path)
+    if not signed_url:
+        raise NotFoundError(detail="Bukti pembayaran tidak valid")
+    return RedirectResponse(
+        signed_url,
+        status_code=302,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
 
 class OrderStatusIn(BaseModel):
     status: Literal["approved", "rejected", "expired"]

@@ -11,7 +11,7 @@ Skenario:
 """
 
 import pytest
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 import time
 
 from app.crud.crud_batch import (
@@ -99,67 +99,32 @@ class TestCrudBatch:
     # Logical & Filter Verification (Create/Update)
     # ═══════════════════════════════════════════
 
-    @pytest.mark.parametrize(
-        "is_active, expected_deactivate_calls",
-        [
-            (True, 1),
-            (False, 0),
-        ],
-        ids=["create_active_deactivates_others", "create_inactive_does_not_deactivate"]
-    )
-    def test_create_batch_logic(self, mock_supabase, is_active, expected_deactivate_calls):
-        """Memastikan jika is_active=True, maka melakukan update batch lain menjadi False."""
-        mock_table = mock_supabase.table.return_value
-        
-        # Setup insert mock
-        mock_insert = mock_table.insert.return_value
-        mock_insert.execute.return_value.data = [{"id": "new-batch", "name": "New", "is_active": is_active}]
-        
-        # Setup update mock (for deactivation)
-        mock_update = mock_table.update.return_value
-        mock_neq = mock_update.neq.return_value
-        
+    @pytest.mark.parametrize("is_active", [True, False])
+    def test_create_batch_logic(self, mock_supabase, is_active):
+        mock_supabase.rpc.return_value.execute.return_value = MagicMock(
+            data={"id": "new-batch", "name": "New", "is_active": is_active}
+        )
         new_data = {"name": "New", "is_active": is_active}
         result = create_batch(new_data)
-        
+
         assert result["id"] == "new-batch"
-        
-        # Verify insert
-        mock_table.insert.assert_called_once_with(new_data)
-        
-        # Verify conditional deactivation
-        if expected_deactivate_calls > 0:
-            mock_table.update.assert_called_once_with({"is_active": False})
-            mock_update.neq.assert_called_once_with("id", "00000000-0000-0000-0000-000000000000")
-            mock_neq.execute.assert_called_once()
-        else:
-            mock_table.update.assert_not_called()
+        mock_supabase.rpc.assert_called_once_with(
+            "admin_create_batch", {"p_name": "New", "p_is_active": is_active}
+        )
+        mock_supabase.table.assert_not_called()
 
     def test_update_batch_deactivates_others(self, mock_supabase):
-        """Jika update is_active=True, batch lain harus dinonaktifkan selain bid yang sedang diupdate."""
-        mock_table = mock_supabase.table.return_value
-        
-        # Mock for updating the actual batch
-        mock_update = mock_table.update.return_value
-        mock_eq = mock_update.eq.return_value
-        mock_eq.execute.return_value.data = [{"id": "b1", "name": "Updated", "is_active": True}]
-        
-        # Mock for deactivating others (using neq)
-        mock_neq = mock_update.neq.return_value
-        
+        mock_supabase.rpc.return_value.execute.return_value = MagicMock(
+            data={"id": "b1", "name": "Updated", "is_active": True}
+        )
         update_data = {"name": "Updated", "is_active": True}
         result = update_batch("b1", update_data)
-        
+
         assert result["id"] == "b1"
-        
-        # Behavioral Verification
-        assert mock_table.update.call_count == 2
-        # First update call: deactivate others
-        assert call({"is_active": False}) in mock_table.update.mock_calls
-        mock_update.neq.assert_called_once_with("id", "b1")
-        # Second update call: update actual batch
-        assert call(update_data) in mock_table.update.mock_calls
-        mock_update.eq.assert_called_once_with("id", "b1")
+        mock_supabase.rpc.assert_called_once_with(
+            "admin_update_batch", {"p_batch_id": "b1", "p_patch": update_data}
+        )
+        mock_supabase.table.assert_not_called()
 
     def test_delete_batch(self, mock_supabase):
         """Memastikan delete dipanggil dengan parameter yang benar."""

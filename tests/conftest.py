@@ -28,6 +28,8 @@ def mock_supabase(mocker):
     mocker.patch("app.crud.crud_feedback.supabase", return_value=mock_sb)
     mocker.patch("app.crud.crud_shortlink.supabase", return_value=mock_sb)
     mocker.patch("app.crud.crud_catalog.supabase", return_value=mock_sb)
+    mocker.patch("app.routers.settings.supabase", return_value=mock_sb)
+    mocker.patch("app.routers.auth.supabase", return_value=mock_sb)
     return mock_sb
 
 @pytest.fixture
