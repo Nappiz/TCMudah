@@ -165,6 +165,62 @@ class TestCrudClass:
         assert cls["id"] == "c1"
         mock_table.update.assert_called_once_with({"title": "Updated"})
         mock_update.eq.assert_called_once_with("id", "c1")
+
+    def test_update_class_offers_uses_atomic_sync_rpc(self, mock_supabase):
+        classes_table = MagicMock()
+        offers_table = MagicMock()
+        mock_supabase.table.side_effect = lambda name: {
+            "classes": classes_table,
+            "class_offers": offers_table,
+        }[name]
+
+        offers_table.select.return_value.eq.return_value.execute.return_value.data = [
+            {"id": "offer-2", "class_id": "c1"},
+            {"id": "offer-6", "class_id": "c1"},
+        ]
+        classes_table.update.return_value.eq.return_value.execute.return_value.data = [
+            {"id": "c1"}
+        ]
+        mock_supabase.rpc.return_value.execute.return_value.data = {"ok": True}
+
+        offers = [
+            {
+                "id": "offer-2",
+                "meeting_count": 6,
+                "list_price": 120_000,
+                "price": 100_000,
+                "is_recommended": True,
+                "visible": True,
+                "sort_order": 0,
+            },
+            {
+                "id": "offer-6",
+                "meeting_count": 2,
+                "list_price": 40_000,
+                "price": 40_000,
+                "is_recommended": False,
+                "visible": True,
+                "sort_order": 1,
+            },
+        ]
+
+        with patch(
+            "app.crud.crud_class.get_class_by_id",
+            return_value={"id": "c1", "offers": offers},
+        ):
+            result = update_class("c1", {"title": "Updated", "offers": offers})
+
+        assert result == {"id": "c1", "offers": offers}
+        classes_table.update.assert_called_once_with(
+            {"title": "Updated", "price": 100_000}
+        )
+        mock_supabase.rpc.assert_called_once_with(
+            "admin_sync_class_offers",
+            {"p_class_id": "c1", "p_offers": offers},
+        )
+        offers_table.update.assert_not_called()
+        offers_table.insert.assert_not_called()
+        offers_table.delete.assert_not_called()
         
     def test_delete_class(self, mock_supabase):
         mock_table = mock_supabase.table.return_value

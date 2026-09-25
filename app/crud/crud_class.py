@@ -142,26 +142,13 @@ def update_class(cid: str, data: dict):
         return None
 
     if offers is not None:
-        # Clear the old recommendation first so switching the recommended
-        # offer cannot transiently violate the partial unique index.
-        sb.table("class_offers").update({"is_recommended": False}).eq(
-            "class_id", cid
+        # Synchronize in one database transaction. Besides preventing partial
+        # writes, the RPC temporarily moves changed meeting counts out of the
+        # way so values such as 2 and 6 can be swapped safely.
+        sb.rpc(
+            "admin_sync_class_offers",
+            {"p_class_id": cid, "p_offers": offers},
         ).execute()
-        retained_ids: set[str] = set()
-        for offer in offers:
-            offer_id = offer.get("id")
-            values = {k: v for k, v in offer.items() if k != "id"}
-            values["class_id"] = cid
-            if offer_id:
-                sb.table("class_offers").update(values).eq("id", offer_id).execute()
-                retained_ids.add(offer_id)
-            else:
-                inserted = sb.table("class_offers").insert(values).execute()
-                if inserted.data:
-                    retained_ids.add(inserted.data[0]["id"])
-        removed_ids = existing_ids - retained_ids
-        if removed_ids:
-            sb.table("class_offers").delete().in_("id", list(removed_ids)).execute()
 
     return get_class_by_id(cid)
 

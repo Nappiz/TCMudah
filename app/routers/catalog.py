@@ -9,7 +9,10 @@ from app.schemas.schemas import CatalogOut
 
 
 router = APIRouter(tags=["catalog"])
-CACHE_CONTROL = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+# Catalog prices and meeting options are managed from the CMS and must be
+# visible immediately after an update. Keep the ETag for explicit conditional
+# requests, but do not let browsers or shared proxies serve an old snapshot.
+CACHE_CONTROL = "no-store"
 
 
 def _etag_matches(if_none_match: str | None, etag: str) -> bool:

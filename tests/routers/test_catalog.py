@@ -10,12 +10,12 @@ EMPTY_CATALOG = {
 }
 
 
-def test_catalog_has_shared_cache_headers_and_etag(test_client):
+def test_catalog_disables_stale_cache_and_has_etag(test_client):
     with patch("app.routers.catalog.crud_catalog.get_public_catalog", return_value=EMPTY_CATALOG):
         response = test_client.get("/catalog")
 
     assert response.status_code == 200
-    assert "s-maxage=300" in response.headers["cache-control"]
+    assert response.headers["cache-control"] == "no-store"
     assert response.headers["surrogate-key"] == "public-catalog"
     assert response.headers["etag"]
 
