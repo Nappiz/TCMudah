@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Literal, Annotated, List
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 from typing_extensions import Annotated
 
 
@@ -103,14 +103,49 @@ IdList10 = Annotated[list[str], Field(min_length=1, max_length=10)]
 MentorIdList5 = Annotated[list[str], Field(min_length=1, max_length=5)]
 NonNegInt = Annotated[int, Field(ge=0)]
 
+
+class ClassOfferIn(BaseModel):
+    id: Optional[str] = None
+    meeting_count: int = Field(..., ge=1, le=100)
+    list_price: NonNegInt
+    price: NonNegInt
+    is_recommended: bool = False
+    visible: bool = True
+    sort_order: int = Field(default=0, ge=0, le=1000)
+
+    @model_validator(mode="after")
+    def validate_price(self):
+        if self.price > self.list_price:
+            raise ValueError("Harga jual tidak boleh melebihi harga normal")
+        return self
+
+
+class ClassOfferOut(ClassOfferIn):
+    id: str
+    class_id: str
+    created_at: Optional[str] = None
+
 class ClassIn(BaseModel):
     title: Text150
     description: Text800
     mentor_ids: MentorIdList5
     curriculum_ids: IdList10
-    price: NonNegInt
+    # Kept during the transition for old clients and analytics. New clients
+    # send offers and the backend mirrors the recommended offer into price.
+    price: NonNegInt = 0
+    base_price_per_meeting: NonNegInt = 0
+    offers: list[ClassOfferIn] = Field(default_factory=list, max_length=20)
     visible: bool = True
     batch_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_offers(self):
+        counts = [offer.meeting_count for offer in self.offers]
+        if len(counts) != len(set(counts)):
+            raise ValueError("Jumlah pertemuan dalam satu kelas tidak boleh duplikat")
+        if sum(offer.is_recommended for offer in self.offers) > 1:
+            raise ValueError("Hanya satu pilihan yang boleh direkomendasikan")
+        return self
 
 class ClassUpdate(BaseModel):
     title: Optional[Text150] = None
@@ -118,11 +153,25 @@ class ClassUpdate(BaseModel):
     mentor_ids: Optional[MentorIdList5] = None
     curriculum_ids: Optional[IdList10] = None
     price: Optional[NonNegInt] = None
+    base_price_per_meeting: Optional[NonNegInt] = None
+    offers: Optional[list[ClassOfferIn]] = Field(default=None, max_length=20)
     visible: Optional[bool] = None
     batch_id: Optional[str] = None
 
+    @model_validator(mode="after")
+    def validate_offers(self):
+        if self.offers is None:
+            return self
+        counts = [offer.meeting_count for offer in self.offers]
+        if len(counts) != len(set(counts)):
+            raise ValueError("Jumlah pertemuan dalam satu kelas tidak boleh duplikat")
+        if sum(offer.is_recommended for offer in self.offers) > 1:
+            raise ValueError("Hanya satu pilihan yang boleh direkomendasikan")
+        return self
+
 class ClassOut(ClassIn):
     id: str
+    offers: list[ClassOfferOut] = Field(default_factory=list)
     created_at: Optional[str] = None
 
 # ===== Checkout / Orders =====
@@ -135,6 +184,7 @@ class CheckoutInfoOut(BaseModel):
 class OrderItemIn(BaseModel):
     item_id: str
     item_type: Literal["class", "package"] = "class"
+    offer_id: Optional[str] = None
     qty: int = Field(..., ge=1, le=99)
 
 class OrderCreateIn(BaseModel):
@@ -268,10 +318,16 @@ class ShortlinkResolveOut(BaseModel):
     url: str
 
 # ===== Packages =====
+class PackageItemSelection(BaseModel):
+    class_id: str
+    class_offer_id: str
+
+
 class PackageIn(BaseModel):
     title: Text150
     description: Text800
     class_ids: list[str] = Field(..., min_length=1)
+    items: list[PackageItemSelection] = Field(default_factory=list)
     price: NonNegInt
     visible: bool = True
     batch_id: Optional[str] = None
@@ -280,12 +336,14 @@ class PackageUpdate(BaseModel):
     title: Optional[Text150] = None
     description: Optional[Text800] = None
     class_ids: Optional[list[str]] = None
+    items: Optional[list[PackageItemSelection]] = None
     price: Optional[NonNegInt] = None
     visible: Optional[bool] = None
     batch_id: Optional[str] = None
 
 class PackageOut(PackageIn):
     id: str
+    items: list[PackageItemSelection] = Field(default_factory=list)
     created_at: Optional[str] = None
 
 class EnrollmentPackageIn(BaseModel):

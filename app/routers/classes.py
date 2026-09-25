@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from app.errors.exceptions import NotFoundError
+from app.errors.exceptions import BadRequestError, NotFoundError
 
 from app.schemas.schemas import ClassIn, ClassOut, ClassUpdate
 from app.core.deps import require_roles
@@ -36,7 +36,10 @@ def get_class_admin(cid: str):
     dependencies=[Depends(require_roles("admin", "superadmin"))]
 )
 def create_class(data: ClassIn):
-    return crud_class.create_class(data.model_dump())
+    try:
+        return crud_class.create_class(data.model_dump())
+    except ValueError as exc:
+        raise BadRequestError(detail=str(exc)) from exc
 
 @router.patch(
     "/admin/classes/{cid}",
@@ -45,7 +48,10 @@ def create_class(data: ClassIn):
 )
 def update_class(cid: str, data: ClassUpdate):
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
-    up = crud_class.update_class(cid, payload)
+    try:
+        up = crud_class.update_class(cid, payload)
+    except ValueError as exc:
+        raise BadRequestError(detail=str(exc)) from exc
     if not up:
         raise NotFoundError(detail="Data tidak ditemukan")
     return up

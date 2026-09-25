@@ -72,6 +72,7 @@ def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
             (
                 "Keranjang kosong",
                 "Item order duplikat",
+                "Kelas duplikat dengan isi bundle",
                 "Format item order tidak valid",
                 "Item order tidak valid",
                 "Item tidak tersedia",

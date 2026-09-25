@@ -25,7 +25,10 @@ def list_packages_admin():
     dependencies=[Depends(require_roles("admin", "superadmin"))]
 )
 def create_package(data: PackageIn):
-    ins = crud_package.create_package(data.model_dump())
+    try:
+        ins = crud_package.create_package(data.model_dump())
+    except ValueError as exc:
+        raise BadRequestError(detail=str(exc)) from exc
     if not ins:
         raise BadRequestError(detail="Gagal membuat paket")
     return ins
@@ -43,7 +46,10 @@ def update_package(pid: str, data: PackageUpdate):
             raise NotFoundError(detail="Paket tidak ditemukan")
         return res
         
-    up = crud_package.update_package(pid, payload)
+    try:
+        up = crud_package.update_package(pid, payload)
+    except ValueError as exc:
+        raise BadRequestError(detail=str(exc)) from exc
     if not up:
         raise NotFoundError(detail="Paket tidak ditemukan")
     return up

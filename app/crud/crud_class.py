@@ -2,7 +2,22 @@ from app.core.supabase_client import supabase
 from app.crud.crud_batch import get_active_batch_id_cached
 
 
-CLASS_COLUMNS = "id,title,description,mentor_ids,curriculum_ids,price,visible,batch_id,created_at"
+CLASS_COLUMNS = "id,title,description,mentor_ids,curriculum_ids,price,base_price_per_meeting,visible,batch_id,created_at,offers:class_offers(id,class_id,meeting_count,list_price,price,is_recommended,visible,sort_order,created_at)"
+def _normalize_offers(offers: list[dict], legacy_price: int = 0):
+    normalized = [dict(offer) for offer in offers]
+    if not normalized:
+        normalized = [{
+            "meeting_count": 6,
+            "list_price": legacy_price,
+            "price": legacy_price,
+            "is_recommended": True,
+            "visible": True,
+            "sort_order": 0,
+        }]
+    if not any(offer.get("is_recommended") for offer in normalized):
+        normalized[0]["is_recommended"] = True
+    return normalized
+
 
 def get_public_classes():
     sb = supabase()
@@ -43,18 +58,112 @@ def get_classes_by_ids(cids: list[str]):
 
 def create_class(data: dict):
     sb = supabase()
-    if not data.get("batch_id"):
+    if "offers" not in data:
+        payload = dict(data)
+        if not payload.get("batch_id"):
+            active_id = get_active_batch_id_cached()
+            if active_id:
+                payload["batch_id"] = active_id
+        ins = sb.table("classes").insert(payload).execute()
+        return ins.data[0] if ins.data else None
+
+    payload = dict(data)
+    offers = _normalize_offers(payload.pop("offers", []), payload.get("price", 0))
+    recommended = next(offer for offer in offers if offer.get("is_recommended"))
+    payload["price"] = recommended["price"]
+    if not payload.get("batch_id"):
         active_id = get_active_batch_id_cached()
         if active_id:
-            data["batch_id"] = active_id
+            payload["batch_id"] = active_id
             
-    ins = sb.table("classes").insert(data).execute()
-    return ins.data[0] if ins.data else None
+    ins = sb.table("classes").insert(payload).execute()
+    if not ins.data:
+        return None
+    created = ins.data[0]
+    try:
+        offer_rows = []
+        for offer in offers:
+            row = {k: v for k, v in offer.items() if k != "id" or v is not None}
+            row["class_id"] = created["id"]
+            offer_rows.append(row)
+        sb.table("class_offers").insert(offer_rows).execute()
+    except Exception:
+        sb.table("classes").delete().eq("id", created["id"]).execute()
+        raise
+    return get_class_by_id(created["id"])
 
 def update_class(cid: str, data: dict):
     sb = supabase()
-    up = sb.table("classes").update(data).eq("id", cid).execute()
-    return up.data[0] if up.data else None
+    if "offers" not in data:
+        up = sb.table("classes").update(data).eq("id", cid).execute()
+        return up.data[0] if up.data else None
+
+    payload = dict(data)
+    offers = payload.pop("offers", None)
+    if offers is not None:
+        offers = _normalize_offers(offers, payload.get("price", 0))
+        recommended = next(offer for offer in offers if offer.get("is_recommended"))
+        payload["price"] = recommended["price"]
+
+    existing_ids: set[str] = set()
+    if offers is not None:
+        existing_response = (
+            sb.table("class_offers")
+            .select("id,class_id")
+            .eq("class_id", cid)
+            .execute()
+        )
+        existing_ids = {row["id"] for row in existing_response.data or []}
+        supplied_existing_ids = {
+            offer["id"] for offer in offers if offer.get("id")
+        }
+        unknown_ids = supplied_existing_ids - existing_ids
+        if unknown_ids:
+            raise ValueError("Pilihan pertemuan tidak termasuk dalam kelas ini")
+        removed_ids = existing_ids - supplied_existing_ids
+        if removed_ids:
+            references = (
+                sb.table("package_items")
+                .select("class_offer_id")
+                .in_("class_offer_id", list(removed_ids))
+                .limit(1)
+                .execute()
+            )
+            if references.data:
+                raise ValueError(
+                    "Pilihan pertemuan masih digunakan oleh bundle dan tidak dapat dihapus"
+                )
+
+    if payload:
+        up = sb.table("classes").update(payload).eq("id", cid).execute()
+        if not up.data:
+            return None
+    elif not get_class_by_id(cid):
+        return None
+
+    if offers is not None:
+        # Clear the old recommendation first so switching the recommended
+        # offer cannot transiently violate the partial unique index.
+        sb.table("class_offers").update({"is_recommended": False}).eq(
+            "class_id", cid
+        ).execute()
+        retained_ids: set[str] = set()
+        for offer in offers:
+            offer_id = offer.get("id")
+            values = {k: v for k, v in offer.items() if k != "id"}
+            values["class_id"] = cid
+            if offer_id:
+                sb.table("class_offers").update(values).eq("id", offer_id).execute()
+                retained_ids.add(offer_id)
+            else:
+                inserted = sb.table("class_offers").insert(values).execute()
+                if inserted.data:
+                    retained_ids.add(inserted.data[0]["id"])
+        removed_ids = existing_ids - retained_ids
+        if removed_ids:
+            sb.table("class_offers").delete().in_("id", list(removed_ids)).execute()
+
+    return get_class_by_id(cid)
 
 def delete_class(cid: str):
     sb = supabase()
