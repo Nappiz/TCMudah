@@ -123,17 +123,16 @@ begin
         raise exception 'Order expiration revoked access';
     end if;
     candidates := public.admin_enrollment_candidates(null, 20, null, null);
-    if not exists (
+    if exists (
         select 1 from jsonb_array_elements(candidates -> 'participants') candidate
         where candidate ->> 'id' = '00000000-0000-0000-0000-000000000001'
     ) then
-        raise exception 'Participant with active access disappeared after expiry';
+        raise exception 'Participant with only an expired order remains in enrollment candidates';
     end if;
     bootstrap := public.admin_enrollment_bootstrap(
         '00000000-0000-0000-0000-000000000001', 'nobody', 20, null, null);
-    if bootstrap -> 'selected_user' ->> 'id' <> '00000000-0000-0000-0000-000000000001'
-       or bootstrap -> 'selected_user' ->> 'id' is null then
-        raise exception 'Participant selection was lost after order expiry';
+    if bootstrap -> 'selected_user' ->> 'id' is not null then
+        raise exception 'Participant with only an expired order remains selected';
     end if;
 end;
 $$;

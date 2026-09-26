@@ -13,6 +13,7 @@ supabase/migrations/202609250001_class_offers.sql
 supabase/migrations/202609250002_atomic_class_offer_updates.sql
 supabase/migrations/202609250003_fix_order_status_enum_cast.sql
 supabase/migrations/202609250004_order_enrollment.sql
+supabase/migrations/202609250005_enrollment_candidates_approved_only.sql
 ```
 
 Urutan rollout yang aman:
@@ -32,7 +33,10 @@ Urutan rollout yang aman:
    duplicate enrollment atau order yang gagal dibackfill.
 6. Terapkan migrasi class offers dan order enrollment sesuai urutan di atas. Semua order
    yang sudah ada mendapat `fulfillment_mode = legacy_manual`; order baru dibuat dalam
-   mode `automatic`. Migrasi tidak mengubah enrollment yang sudah ada.
+   mode `automatic`. Migrasi tidak mengubah enrollment yang sudah ada. Migration
+   `202609250005_enrollment_candidates_approved_only.sql` menjaga akses dari order yang
+   sudah expired, tetapi mengeluarkan peserta tersebut dari kandidat enrollment manual
+   jika tidak memiliki order approved lain.
 7. Jalankan [`order_enrollment_audit.sql`](order_enrollment_audit.sql) untuk memeriksa
    pending order lama dan histori paket yang belum mempunyai snapshot. Selesaikan pending
    order lama melalui alur enrollment manual.
