@@ -73,30 +73,35 @@ def test_settings_batch_get_is_one_query(test_client, mock_supabase):
         mock_supabase.table.return_value.select.return_value.in_.return_value.execute
     )
     execute.return_value.data = [
-        {"key": "one", "value": "1"},
-        {"key": "two", "value": "2"},
+        {"key": "maintenance_mode", "value": "true"},
+        {"key": "maintenance_message", "value": "Pause"},
     ]
 
-    response = test_client.get("/settings?keys=one&keys=two")
+    response = test_client.get(
+        "/settings?keys=maintenance_mode&keys=maintenance_message"
+    )
 
     assert response.status_code == 200
-    assert response.json() == {"one": "1", "two": "2"}
+    assert response.json() == {
+        "maintenance_mode": "true",
+        "maintenance_message": "Pause",
+    }
     mock_supabase.table.assert_called_once_with("app_settings")
 
 
 def test_setting_write_is_single_upsert(auth_client_admin, mock_supabase):
     mock_supabase.table.return_value.upsert.return_value.execute.return_value.data = [
-        {"key": "feature", "value": "true"}
+        {"key": "maintenance_mode", "value": "true"}
     ]
 
     response = auth_client_admin.put(
-        "/settings/feature", json={"value": "true"}
+        "/settings/maintenance_mode", json={"value": "true"}
     )
 
     assert response.status_code == 200
     mock_supabase.table.return_value.select.assert_not_called()
     mock_supabase.table.return_value.upsert.assert_called_once_with(
-        {"key": "feature", "value": "true"}, on_conflict="key"
+        {"key": "maintenance_mode", "value": "true"}, on_conflict="key"
     )
 
 

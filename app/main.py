@@ -101,5 +101,7 @@ app.include_router(catalog_router)
 from app.routers.batches import router as batches_router
 app.include_router(batches_router)
 
+from app.routers.settings import admin_router as admin_settings_router
 from app.routers.settings import router as settings_router
 app.include_router(settings_router)
+app.include_router(admin_settings_router)
