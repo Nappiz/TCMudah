@@ -337,6 +337,8 @@ SUPABASE_URL=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx
 
 PAYMENTS_BUCKET=payments
+# Transitional fallback only; manage these values from /cms/settings after the
+# first deploy of the database-backed checkout settings.
 BANK_NAME=xxx
 BANK_ACCOUNT=xxx
 BANK_HOLDER=xxx
@@ -345,6 +347,26 @@ GROUP_LINK=xxx
 ```
 
 Ubah nilai tersebut jika backend berjalan pada host/port yang berbeda.
+
+### 2.1 Migrasi pengaturan pembayaran dan maintenance
+
+Pengaturan pembayaran sekarang disimpan di CMS melalui `/cms/settings`.
+Deployment pertama tetap membaca `BANK_NAME`, `BANK_ACCOUNT`, `BANK_HOLDER`,
+dan `GROUP_LINK` sebagai fallback agar checkout existing tidak langsung putus.
+
+Setelah deployment baru aktif:
+
+1. Buka `/cms/settings` sebagai admin atau superadmin.
+2. Isi dan simpan nama bank, nomor rekening, nama pemilik rekening, dan link
+   grup WhatsApp.
+3. Buka checkout peserta dan pastikan informasi pembayaran sudah benar.
+4. Uji toggle maintenance dan pastikan CMS/login tetap bisa diakses.
+5. Setelah verifikasi, hapus empat variabel checkout dari environment deploy
+   dan dari konfigurasi backend pada cleanup deploy berikutnya.
+
+Maintenance mode dapat diaktifkan dari section **Maintenance**. Saat aktif,
+halaman publik/peserta menampilkan pesan maintenance dan checkout ditolak;
+akses CMS serta login tetap tersedia untuk staff.
 
 ### 3. Instal Dependensi
 
