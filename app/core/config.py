@@ -23,10 +23,10 @@ class Settings(BaseModel):
     PAYMENT_UPLOAD_TTL_MINUTES: int = 10
     PAYMENT_READ_TTL_SECONDS: int = 300
 
-    BANK_NAME: str = "BANK_DEV"
-    BANK_ACCOUNT: str = "7881292673"
-    BANK_HOLDER: str = "BADRUZZAMAN NAFIZ"
-    GROUP_LINK: str = "https://chat.whatsapp.com/JExaTob0k08CvPzJtSfN5l"
+    BANK_NAME: str = ""
+    BANK_ACCOUNT: str = ""
+    BANK_HOLDER: str = ""
+    GROUP_LINK: str = ""
 
 
 from functools import lru_cache
@@ -69,8 +69,8 @@ def get_settings() -> Settings:
         ),
 
         # Checkout / Payments
-        BANK_NAME=os.getenv("BANK_NAME", "BANK_DEV"),
-        BANK_ACCOUNT=os.getenv("BANK_ACCOUNT", "7881292673"),
-        BANK_HOLDER=os.getenv("BANK_HOLDER", "BADRUZZAMAN NAFIZ"),
-        GROUP_LINK=os.getenv("GROUP_LINK", "https://chat.whatsapp.com/JExaTob0k08CvPzJtSfN5l"),
+        BANK_NAME=os.getenv("BANK_NAME", ""),
+        BANK_ACCOUNT=os.getenv("BANK_ACCOUNT", ""),
+        BANK_HOLDER=os.getenv("BANK_HOLDER", ""),
+        GROUP_LINK=os.getenv("GROUP_LINK", ""),
     )

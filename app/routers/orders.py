@@ -21,17 +21,35 @@ from typing import Literal
 from app.core.deps import get_current_user, require_roles
 from app.core.config import get_settings
 from app.crud import crud_order
+from app.services.app_settings import effective_checkout_values, maintenance_state
 
 router = APIRouter(tags=["orders"])
 settings = get_settings()
+STAFF_ROLES = {"mentor", "admin", "superadmin"}
+
+
+def ensure_participant_flow_available(user: dict) -> None:
+    if user.get("role") in STAFF_ROLES:
+        return
+    enabled, _ = maintenance_state()
+    if enabled:
+        raise ServiceUnavailableError(
+            detail="Checkout sedang ditutup sementara karena maintenance"
+        )
 
 @router.get("/checkout/info", response_model=CheckoutInfoOut, dependencies=[Depends(get_current_user)])
 def checkout_info():
+    values = effective_checkout_values()
+    required = ("checkout_bank_name", "checkout_bank_account", "checkout_bank_holder")
+    if any(not values.get(key) for key in required):
+        raise ServiceUnavailableError(
+            detail="Informasi pembayaran belum dikonfigurasi"
+        )
     return {
-        "bank_name": settings.BANK_NAME,
-        "bank_account": settings.BANK_ACCOUNT,
-        "bank_holder": settings.BANK_HOLDER,
-        "group_link": settings.GROUP_LINK,
+        "bank_name": values["checkout_bank_name"],
+        "bank_account": values["checkout_bank_account"],
+        "bank_holder": values["checkout_bank_holder"],
+        "group_link": values.get("checkout_group_link") or None,
     }
 
 @router.post(
@@ -43,6 +61,7 @@ def create_payment_upload_intent(
     payload: PaymentUploadIntentIn,
     user=Depends(get_current_user),
 ):
+    ensure_participant_flow_available(user)
     if payload.size_bytes > settings.PAYMENT_UPLOAD_MAX_BYTES:
         raise BadRequestError(detail="Ukuran bukti pembayaran terlalu besar")
     try:
@@ -59,6 +78,7 @@ def create_payment_upload_intent(
 
 @router.post("/orders", response_model=OrderOut, status_code=201, dependencies=[Depends(get_current_user)])
 def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
+    ensure_participant_flow_available(user)
     try:
         row = crud_order.create_order_transactional(
             user["id"],
