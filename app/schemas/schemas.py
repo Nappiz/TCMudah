@@ -366,6 +366,13 @@ class AppSettingUpdate(BaseModel):
     value: str
 
 
+class CheckoutSettingsUpdate(BaseModel):
+    bank_name: str
+    bank_account: str
+    bank_holder: str
+    group_link: str = ""
+
+
 # ===== Optimized admin read models =====
 class EnrollmentParticipantOut(BaseModel):
     id: str

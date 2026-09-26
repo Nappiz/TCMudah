@@ -1,4 +1,6 @@
 from collections.abc import Sequence
+from ipaddress import ip_address
+import re
 from urllib.parse import urlparse
 
 from app.core import supabase_client
@@ -51,6 +53,9 @@ _MAX_LENGTHS = {
     "checkout_bank_holder": 120,
     "checkout_group_link": 500,
 }
+_HOSTNAME_RE = re.compile(
+    r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$"
+)
 
 
 def _normalize_keys(keys: Sequence[str]) -> list[str]:
@@ -130,7 +135,24 @@ def validate_setting_value(key: str, value: str) -> str:
     if max_length is not None and len(normalized) > max_length:
         raise BadRequestError(detail="Nilai setting terlalu panjang")
     if key == "checkout_group_link" and normalized:
-        parsed = urlparse(normalized)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        if any(char.isspace() or ord(char) < 32 for char in normalized):
+            raise BadRequestError(detail="Link grup WhatsApp tidak valid")
+        try:
+            parsed = urlparse(normalized)
+            hostname = parsed.hostname
+            parsed.port
+        except (ValueError, UnicodeError):
+            raise BadRequestError(detail="Link grup WhatsApp tidak valid")
+        if parsed.scheme not in {"http", "https"} or not hostname:
+            raise BadRequestError(detail="Link grup WhatsApp tidak valid")
+        normalized_hostname = hostname.rstrip(".")
+        try:
+            ip_address(normalized_hostname)
+            valid_hostname = True
+        except ValueError:
+            valid_hostname = normalized_hostname == "localhost" or bool(
+                _HOSTNAME_RE.fullmatch(normalized_hostname)
+            )
+        if not valid_hostname:
             raise BadRequestError(detail="Link grup WhatsApp tidak valid")
     return normalized
