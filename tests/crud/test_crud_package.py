@@ -70,21 +70,23 @@ class TestCrudPackage:
         mock_table = mock_supabase.table.return_value
         mock_select = mock_table.select.return_value
         mock_order = mock_select.order.return_value
+        mock_active = mock_order.is_.return_value
         
         if expected_batch_filter:
-            mock_eq = mock_order.eq.return_value
+            mock_eq = mock_active.eq.return_value
             mock_eq.execute.return_value.data = [{"id": "p1"}]
         else:
-            mock_order.execute.return_value.data = [{"id": "p1"}]
+            mock_active.execute.return_value.data = [{"id": "p1"}]
             
         packages = get_all_packages(batch_id=batch_id_arg)
         
         assert len(packages) == 1
+        mock_order.is_.assert_called_once_with("archived_at", "null")
         
         if expected_batch_filter:
-            mock_order.eq.assert_called_once_with("batch_id", expected_batch_filter)
+            mock_active.eq.assert_called_once_with("batch_id", expected_batch_filter)
         else:
-            mock_order.eq.assert_not_called()
+            mock_active.eq.assert_not_called()
 
     # ═══════════════════════════════════════════
     # Mutations (Create, Update, Delete)
@@ -123,13 +125,11 @@ class TestCrudPackage:
         mock_update.eq.assert_called_once_with("id", "p1")
         
     def test_delete_package(self, mock_supabase):
-        mock_table = mock_supabase.table.return_value
-        mock_delete = mock_table.delete.return_value
-        mock_eq = mock_delete.eq.return_value
-        mock_eq.execute.return_value.data = [{"id": "p1"}]
+        mock_supabase.rpc.return_value.execute.return_value.data = {"id": "p1"}
         
         res = delete_package("p1")
         
-        assert res == [{"id": "p1"}]
-        mock_table.delete.assert_called_once()
-        mock_delete.eq.assert_called_once_with("id", "p1")
+        assert res == {"id": "p1"}
+        mock_supabase.rpc.assert_called_once_with(
+            "admin_archive_package", {"p_package_id": "p1"}
+        )

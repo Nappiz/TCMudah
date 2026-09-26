@@ -185,7 +185,7 @@ class OrderItemIn(BaseModel):
     item_id: str
     item_type: Literal["class", "package"] = "class"
     offer_id: Optional[str] = None
-    qty: int = Field(..., ge=1, le=99)
+    qty: Literal[1]
 
 class OrderCreateIn(BaseModel):
     items: List[OrderItemIn] = Field(..., min_length=1, max_length=100)
@@ -211,6 +211,7 @@ class OrderOut(BaseModel):
     items: list[dict]
     total: int
     status: OrderStatus
+    fulfillment_mode: Literal["legacy_manual", "automatic"] = "legacy_manual"
     proof_url: Optional[str] = None
     sender_name: Optional[str] = None
     note: Optional[str] = None

@@ -1,4 +1,5 @@
 from app.core.supabase_client import supabase
+from app.core.rpc import unwrap_rpc_object
 from app.crud.crud_batch import get_active_batch_id_cached
 
 
@@ -37,7 +38,12 @@ def get_all_classes(batch_id: str = None):
     if batch_id is None:
         batch_id = get_active_batch_id_cached()
         
-    q = sb.table("classes").select(CLASS_COLUMNS).order("created_at", desc=True)
+    q = (
+        sb.table("classes")
+        .select(CLASS_COLUMNS)
+        .order("created_at", desc=True)
+        .is_("archived_at", "null")
+    )
     if batch_id and batch_id != "all":
         q = q.eq("batch_id", batch_id)
         
@@ -153,6 +159,7 @@ def update_class(cid: str, data: dict):
     return get_class_by_id(cid)
 
 def delete_class(cid: str):
-    sb = supabase()
-    delres = sb.table("classes").delete().eq("id", cid).execute()
-    return delres.data if delres.data else None
+    response = supabase().rpc("admin_archive_class", {"p_class_id": cid}).execute()
+    if response.data is None:
+        return None
+    return unwrap_rpc_object(response.data, rpc_name="admin_archive_class")

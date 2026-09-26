@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 from app.errors.exceptions import (
     BadRequestError,
+    ConflictError,
     NotFoundError,
     ServiceUnavailableError,
 )
@@ -76,6 +77,8 @@ def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
                 "Format item order tidak valid",
                 "Item order tidak valid",
                 "Item tidak tersedia",
+                "Paket ini kosong",
+                "Jumlah item harus 1",
                 "Bukti pembayaran tidak valid atau kedaluwarsa",
                 "Bukti pembayaran belum diunggah",
                 "Bukti pembayaran tidak sesuai intent",
@@ -91,6 +94,7 @@ def create_order(payload: OrderCreateIn, user=Depends(get_current_user)):
         "items": row["items"],
         "total": row["total"],
         "status": row["status"],
+        "fulfillment_mode": row.get("fulfillment_mode", "legacy_manual"),
         "proof_url": row.get("proof_url"),
         "sender_name": row.get("sender_name"),
         "note": row.get("note"),
@@ -145,7 +149,23 @@ class OrderStatusIn(BaseModel):
            response_model=AdminOrderOut,
            dependencies=[Depends(require_roles("mentor", "admin", "superadmin"))])
 def update_order_status(oid: str, data: OrderStatusIn):
-    row = crud_order.update_order_status(oid, data.status)
+    try:
+        row = crud_order.update_order_status(oid, data.status)
+    except Exception as exc:
+        message = public_rpc_error(
+            exc,
+            (
+                "Perubahan status order tidak diizinkan",
+                "Item order tidak lengkap",
+                "Snapshot paket tidak lengkap",
+                "Snapshot paket berisi kelas duplikat",
+                "Kelas pesanan sudah tidak tersedia",
+                "Jumlah item harus 1",
+            ),
+        )
+        if message:
+            raise ConflictError(detail=message) from exc
+        raise
     if not row:
         raise NotFoundError(detail="Order tidak ditemukan")
     return row

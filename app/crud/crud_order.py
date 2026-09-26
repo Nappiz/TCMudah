@@ -6,7 +6,7 @@ from app.core.supabase_client import supabase
 from uuid import uuid4
 
 
-ORDER_COLUMNS = "id,user_id,items,total,status,proof_url,sender_name,note,created_at"
+ORDER_COLUMNS = "id,user_id,items,total,status,fulfillment_mode,proof_url,sender_name,note,created_at"
 settings = get_settings()
 
 _PROOF_EXTENSIONS = {

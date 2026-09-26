@@ -75,13 +75,13 @@ class TestCrudClass:
         mock_table = mock_supabase.table.return_value
         mock_select = mock_table.select.return_value
         mock_order = mock_select.order.return_value
+        mock_active = mock_order.is_.return_value
         
-        # Depending on whether there is an eq filter after order
         if expected_batch_filter:
-            mock_eq = mock_order.eq.return_value
+            mock_eq = mock_active.eq.return_value
             mock_eq.execute.return_value.data = [{"id": "c1"}, {"id": "c2"}]
         else:
-            mock_order.execute.return_value.data = [{"id": "c1"}, {"id": "c2"}]
+            mock_active.execute.return_value.data = [{"id": "c1"}, {"id": "c2"}]
             
         classes = get_all_classes(batch_id=batch_id_arg)
         
@@ -89,12 +89,12 @@ class TestCrudClass:
         mock_supabase.table.assert_called_once_with("classes")
         mock_table.select.assert_called_once_with(CLASS_COLUMNS)
         mock_select.order.assert_called_once_with("created_at", desc=True)
+        mock_order.is_.assert_called_once_with("archived_at", "null")
         
         if expected_batch_filter:
-            mock_order.eq.assert_called_once_with("batch_id", expected_batch_filter)
+            mock_active.eq.assert_called_once_with("batch_id", expected_batch_filter)
         else:
-            # ensure eq is not called on the query object
-            mock_order.eq.assert_not_called()
+            mock_active.eq.assert_not_called()
 
     def test_get_class_by_id(self, mock_supabase):
         mock_table = mock_supabase.table.return_value
@@ -223,13 +223,11 @@ class TestCrudClass:
         offers_table.delete.assert_not_called()
         
     def test_delete_class(self, mock_supabase):
-        mock_table = mock_supabase.table.return_value
-        mock_delete = mock_table.delete.return_value
-        mock_eq = mock_delete.eq.return_value
-        mock_eq.execute.return_value.data = [{"id": "c1"}]
+        mock_supabase.rpc.return_value.execute.return_value.data = {"id": "c1"}
         
         res = delete_class("c1")
         
-        assert res == [{"id": "c1"}]
-        mock_table.delete.assert_called_once()
-        mock_delete.eq.assert_called_once_with("id", "c1")
+        assert res == {"id": "c1"}
+        mock_supabase.rpc.assert_called_once_with(
+            "admin_archive_class", {"p_class_id": "c1"}
+        )
