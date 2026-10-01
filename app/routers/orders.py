@@ -162,6 +162,24 @@ def view_payment_proof(oid: str):
         },
     )
 
+
+@router.get("/orders/me/{oid}/proof")
+def view_my_payment_proof(oid: str, user=Depends(get_current_user)):
+    proof_path = crud_order.get_my_order_proof_path(oid, user["id"])
+    if not proof_path:
+        raise NotFoundError(detail="Bukti pembayaran tidak ditemukan")
+    signed_url = crud_order.create_payment_proof_read_url(proof_path)
+    if not signed_url:
+        raise NotFoundError(detail="Bukti pembayaran tidak valid")
+    return RedirectResponse(
+        signed_url,
+        status_code=302,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
 class OrderStatusIn(BaseModel):
     status: Literal["approved", "rejected", "expired"]
 

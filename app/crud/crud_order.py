@@ -88,6 +88,22 @@ def get_order_proof_path(order_id: str) -> str | None:
         return None
     return response.data[0].get("proof_url")
 
+
+def get_my_order_proof_path(order_id: str, user_id: str) -> str | None:
+    response = (
+        supabase()
+        .table("orders")
+        .select("proof_url")
+        .eq("id", order_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        return None
+    return response.data[0].get("proof_url")
+
+
 def create_payment_proof_read_url(proof_path: str) -> str | None:
     if proof_path.startswith(("http://", "https://")):
         candidate = urlparse(proof_path)
